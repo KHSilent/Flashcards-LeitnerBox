@@ -1,7 +1,14 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { PencilSquareIcon, PlayIcon, PlusIcon } from '@heroicons/vue/24/outline';
+import {
+    CheckCircleIcon,
+    ClockIcon,
+    PencilSquareIcon,
+    PlayIcon,
+    PlusIcon,
+    RectangleStackIcon,
+} from '@heroicons/vue/24/outline';
 import StepEditorModal from '../components/StepEditorModal.vue';
 
 const route = useRoute();
@@ -65,6 +72,10 @@ async function saveSteps(steps) {
     }
 }
 
+function delayLabel(summary) {
+    return summary.delay_days === 0 ? 'بدون محدودیت روز' : `${summary.delay_days} روز فاصله`;
+}
+
 onMounted(fetchCategory);
 </script>
 
@@ -110,7 +121,7 @@ onMounted(fetchCategory);
                 {{ error }}
             </p>
 
-            <section class="mb-5 rounded-lg border border-primary-200 bg-primary-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
+            <section v-if="unintroduced?.total_count > 0" class="mb-6 rounded-lg border border-primary-200 bg-primary-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
                 <div class="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
                     <div>
                         <h2 class="text-base font-bold text-primary-900 dark:text-neutral-100">کارت‌های بدون گام</h2>
@@ -118,17 +129,17 @@ onMounted(fetchCategory);
                             {{ unintroduced?.total_count || 0 }} کارت هنوز وارد برنامه مطالعه نشده است.
                         </p>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <input
                             v-model.number="introduceCount"
-                            class="h-10 w-24 rounded-md border border-primary-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black"
+                            class="h-10 w-24 shrink-0 rounded-md border border-primary-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black"
                             dir="ltr"
                             type="number"
                             min="1"
                             max="100"
                         >
                         <button
-                            class="inline-flex h-10 items-center gap-2 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
                             type="button"
                             :disabled="saving || !unintroduced?.total_count"
                             @click="introduce"
@@ -140,52 +151,59 @@ onMounted(fetchCategory);
                 </div>
             </section>
 
-            <div class="space-y-3">
+            <div class="space-y-8">
                 <article
                     v-for="summary in studySteps"
                     :key="summary.index"
-                    class="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950 md:grid-cols-[1fr_auto] md:items-center"
+                    class="grid min-h-36 grid-cols-[2.75rem_minmax(0,1fr)_8rem] items-center gap-0 max-md:grid-cols-[2.5rem_minmax(0,1fr)_5rem] max-md:min-h-28"
+                    dir="ltr"
                 >
-                    <div>
-                        <div class="mb-2 flex flex-wrap items-center gap-2">
-                            <h2 class="text-lg font-bold">{{ summary.label }}</h2>
-                            <span v-if="summary.is_final" class="rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">آخرین گام</span>
-                            <span class="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-neutral-900 dark:text-neutral-300">
-                                {{ summary.delay_days === 0 ? 'بدون محدودیت روز' : `${summary.delay_days} روز فاصله` }}
-                            </span>
+                    <div class="relative h-16 self-start max-md:h-14">
+                        <RouterLink
+                            v-if="summary.due_count > 0"
+                            :to="{ name: 'study', params: { id: page.category.id, step: summary.index } }"
+                            class="absolute left-0 top-2 grid h-11 w-11 place-items-center rounded-md bg-primary-600 text-white shadow-sm shadow-primary-600/20 hover:bg-primary-700 max-md:top-0 max-md:h-10 max-md:w-10"
+                            title="شروع مطالعه"
+                        >
+                            <PlayIcon class="h-5 w-5" />
+                        </RouterLink>
+                        <button
+                            v-else
+                            class="absolute left-0 top-2 grid h-11 w-11 place-items-center rounded-md border border-slate-200 text-slate-300 dark:border-neutral-800 dark:text-neutral-600 max-md:top-0 max-md:h-10 max-md:w-10"
+                            type="button"
+                            disabled
+                            title="کارتی برای امروز نیست"
+                        >
+                            <PlayIcon class="h-5 w-5" />
+                        </button>
+                    </div>
+
+                    <div class="relative h-32 min-w-0 max-md:h-24">
+                        <div class="absolute right-2 top-3 max-w-64 truncate text-right text-sm font-extrabold text-slate-900 dark:text-neutral-100 max-md:top-1 max-md:max-w-36 max-md:text-xs" dir="rtl">
+                            {{ delayLabel(summary) }}
                         </div>
-                        <div class="grid grid-cols-3 gap-2 text-sm">
-                            <div class="rounded-md bg-slate-50 p-3 dark:bg-black">
-                                <p class="text-slate-500 dark:text-neutral-400">کل کارت‌ها</p>
-                                <p class="mt-1 text-lg font-bold">{{ summary.total_count }}</p>
+                        <div class="absolute -left-11 right-0 top-16 h-1 -translate-y-1/2 rounded-full bg-slate-500 dark:bg-neutral-700 max-md:-left-10 max-md:top-12 max-md:h-px" />
+                        <div class="absolute inset-x-0 top-20 flex justify-center gap-12 max-md:top-[3.75rem] max-md:gap-5" dir="rtl">
+                            <div class="flex items-center gap-2 whitespace-nowrap text-sm font-black text-amber-700 dark:text-amber-300 max-md:gap-1 max-md:text-xs" title="در انتظار موعد">
+                                <ClockIcon class="h-5 w-5" />
+                                <span>{{ summary.locked_count }}</span>
                             </div>
-                            <div class="rounded-md bg-emerald-50 p-3 dark:bg-emerald-950/30">
-                                <p class="text-emerald-700 dark:text-emerald-200">آماده مطالعه</p>
-                                <p class="mt-1 text-lg font-bold">{{ summary.due_count }}</p>
+                            <div class="flex items-center gap-2 whitespace-nowrap text-sm font-black text-emerald-700 dark:text-emerald-300 max-md:gap-1 max-md:text-xs" title="آماده مطالعه">
+                                <CheckCircleIcon class="h-5 w-5" />
+                                <span>{{ summary.due_count }}</span>
                             </div>
-                            <div class="rounded-md bg-amber-50 p-3 dark:bg-amber-950/30">
-                                <p class="text-amber-700 dark:text-amber-200">در انتظار موعد</p>
-                                <p class="mt-1 text-lg font-bold">{{ summary.locked_count }}</p>
+                            <div class="flex items-center gap-2 whitespace-nowrap text-sm font-black text-slate-700 dark:text-neutral-200 max-md:gap-1 max-md:text-xs" title="کل کارت‌ها">
+                                <RectangleStackIcon class="h-5 w-5 text-slate-500" />
+                                <span>{{ summary.total_count }}</span>
                             </div>
                         </div>
                     </div>
 
-                    <RouterLink
-                        v-if="summary.due_count > 0"
-                        :to="{ name: 'study', params: { id: page.category.id, step: summary.index } }"
-                        class="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700"
-                    >
-                        <PlayIcon class="h-5 w-5" />
-                        شروع مطالعه
-                    </RouterLink>
-                    <button
-                        v-else
-                        class="h-11 rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-400 dark:border-neutral-700"
-                        type="button"
-                        disabled
-                    >
-                        کارتی برای امروز نیست
-                    </button>
+                    <div class="flex justify-end">
+                        <div class="grid h-32 w-32 place-items-center rounded-full border-4 border-primary-600 bg-primary-400 text-white shadow-xl shadow-primary-500/20 max-md:h-20 max-md:w-20">
+                            <span class="text-5xl font-black leading-none max-md:text-3xl">{{ summary.index }}</span>
+                        </div>
+                    </div>
                 </article>
             </div>
         </template>
