@@ -5,8 +5,8 @@ import { auth } from '../stores/auth';
 
 const router = useRouter();
 const form = reactive({
-    email: 'test@example.com',
-    password: 'password',
+    email: '',
+    password: '',
 });
 const loading = ref(false);
 const error = ref('');

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->group(function () {
     Route::get('/csrf-token', [AuthController::class, 'csrfToken']);
-    Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
+    Route::post('/login', [AuthController::class, 'login'])->middleware(['guest','throttle:5,1']);
 
     Route::middleware('auth')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
