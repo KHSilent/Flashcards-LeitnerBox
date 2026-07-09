@@ -21,6 +21,11 @@ const editingId = ref(null);
 const error = ref('');
 const message = ref('');
 const flashcards = ref([]);
+const typeOptions = [
+    { value: 'english-active', label: 'English Active' },
+    { value: 'english-passive', label: 'English Passive' },
+    { value: 'other', label: 'Other' },
+];
 const pagination = reactive({
     current_page: 1,
     last_page: 1,
@@ -31,6 +36,7 @@ const pagination = reactive({
 });
 const form = reactive({
     title: '',
+    type: 'other',
     sides: [],
 });
 
@@ -38,6 +44,10 @@ const editingCard = computed(() => flashcards.value.find((card) => card.id === e
 
 function firstError(exception, fallback) {
     return exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || fallback;
+}
+
+function typeLabel(type) {
+    return typeOptions.find((option) => option.value === type)?.label || 'Other';
 }
 
 function blankSide(content = '', sideNumber = nextSideNumber()) {
@@ -60,7 +70,8 @@ function nextSideNumber() {
 function resetForm() {
     editingId.value = null;
     form.title = '';
-    form.sides = [blankSide('', 1), blankSide('', 2)];
+    form.type = 'other';
+    form.sides = [blankSide('', 1)];
 }
 
 function openCreateModal() {
@@ -71,6 +82,7 @@ function openCreateModal() {
 function openEditModal(card) {
     editingId.value = card.id;
     form.title = card.title || '';
+    form.type = card.type || 'other';
     form.sides = card.sides.map((side) => ({
         side_number: side.side_number,
         content: side.content,
@@ -118,6 +130,7 @@ function payload(method = null) {
     }
 
     data.append('title', form.title || '');
+    data.append('type', form.type || 'other');
 
     form.sides.forEach((side, index) => {
         data.append(`sides[${index}][side_number]`, side.side_number);
@@ -252,6 +265,9 @@ onMounted(() => fetchCards(1));
                     <div class="min-w-0">
                         <div class="mb-2 flex flex-wrap items-center gap-2">
                             <p class="truncate font-bold">{{ card.title || `کارت ${card.id}` }}</p>
+                            <span class="rounded-md bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700 dark:bg-neutral-900 dark:text-primary-300">
+                                {{ typeLabel(card.type) }}
+                            </span>
                             <span class="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-neutral-900 dark:text-neutral-300">
                                 {{ card.sides.length }} رو
                             </span>
@@ -329,10 +345,20 @@ onMounted(() => fetchCards(1));
                 </header>
 
                 <div class="space-y-4 p-5">
-                    <label class="block">
-                        <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">عنوان</span>
-                        <input v-model="form.title" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
-                    </label>
+                    <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
+                        <label class="block">
+                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">عنوان</span>
+                            <input v-model="form.title" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
+                        </label>
+                        <label class="block">
+                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">نوع</span>
+                            <select v-model="form.type" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
+                                <option v-for="option in typeOptions" :key="option.value" :value="option.value">
+                                    {{ option.label }}
+                                </option>
+                            </select>
+                        </label>
+                    </div>
 
                     <section
                         v-for="(side, index) in form.sides"

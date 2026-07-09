@@ -109,6 +109,7 @@ class StudyController extends Controller
             'flashcard' => [
                 'id' => $studyCard->flashcard->id,
                 'title' => $studyCard->flashcard->title,
+                'type' => $studyCard->flashcard->type,
                 'sides' => $studyCard->flashcard->sides->map(fn ($side) => [
                     'id' => $side->id,
                     'side_number' => $side->side_number,

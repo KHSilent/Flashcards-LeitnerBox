@@ -29,6 +29,7 @@ class FlashcardManagementTest extends TestCase
         $response = $this->actingAs($user)
             ->postJson("/api/categories/{$category->id}/flashcards", [
                 'title' => 'Card title',
+                'type' => 'english-active',
                 'sides' => [
                     ['side_number' => 2, 'content' => 'Back', 'images' => ['image.jpg'], 'audios' => ['voice.mp3']],
                     ['side_number' => 1, 'content' => 'Front', 'images' => [], 'audios' => []],
@@ -36,6 +37,7 @@ class FlashcardManagementTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('flashcard.title', 'Card title')
+            ->assertJsonPath('flashcard.type', 'english-active')
             ->assertJsonPath('flashcard.sides.0.side_number', 1)
             ->assertJsonPath('flashcard.sides.1.content', 'Back');
 
@@ -49,12 +51,14 @@ class FlashcardManagementTest extends TestCase
         $this->actingAs($user)
             ->putJson("/api/categories/{$category->id}/flashcards/{$flashcardId}", [
                 'title' => 'Updated',
+                'type' => 'english-passive',
                 'sides' => [
                     ['side_number' => 5, 'content' => 'Only side', 'images' => [], 'audios' => []],
                 ],
             ])
             ->assertOk()
             ->assertJsonPath('flashcard.title', 'Updated')
+            ->assertJsonPath('flashcard.type', 'english-passive')
             ->assertJsonPath('flashcard.sides.0.side_number', 5)
             ->assertJsonPath('flashcard.sides.0.content', 'Only side');
 
@@ -115,7 +119,8 @@ class FlashcardManagementTest extends TestCase
                     ],
                 ],
             ])
-            ->assertCreated();
+            ->assertCreated()
+            ->assertJsonPath('flashcard.type', 'other');
 
         $this->assertStringStartsWith('/uploads/flashcards/images/', $response->json('flashcard.sides.0.images.0'));
         $this->assertStringStartsWith('/uploads/flashcards/audios/', $response->json('flashcard.sides.0.audios.0'));

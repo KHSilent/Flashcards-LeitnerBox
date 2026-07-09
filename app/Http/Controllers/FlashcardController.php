@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Validation\Rule;
 
 class FlashcardController extends Controller
 {
@@ -46,6 +47,7 @@ class FlashcardController extends Controller
             $flashcard = Flashcard::query()->create([
                 'flashcard_category_id' => $category->id,
                 'title' => $data['title'] ?? null,
+                'type' => $data['type'] ?? Flashcard::DEFAULT_TYPE,
             ]);
 
             $this->syncSides($flashcard, $data['sides']);
@@ -65,6 +67,7 @@ class FlashcardController extends Controller
         $flashcard = DB::transaction(function () use ($flashcard, $data) {
             $flashcard->forceFill([
                 'title' => $data['title'] ?? null,
+                'type' => $data['type'] ?? Flashcard::DEFAULT_TYPE,
             ])->save();
 
             $this->syncSides($flashcard, $data['sides']);
@@ -106,6 +109,7 @@ class FlashcardController extends Controller
     {
         return $request->validate([
             'title' => ['nullable', 'string', 'max:255'],
+            'type' => ['nullable', Rule::in(Flashcard::TYPES)],
             'sides' => ['required', 'array', 'min:1', 'max:12'],
             'sides.*.content' => ['required', 'string'],
             'sides.*.side_number' => ['required', 'integer', 'min:1', 'distinct'],
@@ -166,6 +170,7 @@ class FlashcardController extends Controller
         return [
             'id' => $flashcard->id,
             'title' => $flashcard->title,
+            'type' => $flashcard->type ?: Flashcard::DEFAULT_TYPE,
             'created_at' => $flashcard->created_at?->toIso8601String(),
             'sides' => $flashcard->sides->map(fn ($side) => [
                 'id' => $side->id,

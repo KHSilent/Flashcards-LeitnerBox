@@ -11,9 +11,22 @@ class Flashcard extends Model
 {
     use HasFactory;
 
+    public const TYPE_ENGLISH_ACTIVE = 'english-active';
+    public const TYPE_ENGLISH_PASSIVE = 'english-passive';
+    public const TYPE_OTHER = 'other';
+
+    public const TYPES = [
+        self::TYPE_ENGLISH_ACTIVE,
+        self::TYPE_ENGLISH_PASSIVE,
+        self::TYPE_OTHER,
+    ];
+
+    public const DEFAULT_TYPE = self::TYPE_OTHER;
+
     protected $fillable = [
         'flashcard_category_id',
         'title',
+        'type',
     ];
 
     public function category(): BelongsTo
