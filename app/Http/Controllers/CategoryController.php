@@ -7,6 +7,8 @@ use App\Models\FlashcardCategory;
 use App\Services\LeitnerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class CategoryController extends Controller
 {
@@ -20,22 +22,77 @@ class CategoryController extends Controller
             ->get()
             ->keyBy('flashcard_category_id');
 
-        $categories = FlashcardCategory::query()
+        $canAccessAll = $request->user()->hasRole('accessAllCategories');
+
+        $categoriesQuery = FlashcardCategory::query()
             ->withCount('flashcards')
-            ->orderBy('name')
+            ->orderBy('name');
+
+        if (! $canAccessAll) {
+            $categoriesQuery->whereIn('id', $accesses->keys());
+        }
+
+        $categories = $categoriesQuery
             ->get()
             ->map(fn (FlashcardCategory $category) => [
                 'id' => $category->id,
                 'parent_id' => $category->parent_id,
                 'name' => $category->name,
                 'flashcards_count' => $category->flashcards_count,
-                'access' => $accesses->has($category->id) ? [
-                    'can_edit' => $accesses[$category->id]->can_edit,
-                    'steps' => $this->leitner->steps($accesses[$category->id]),
-                ] : null,
+                'access' => $this->accessPayloadForIndex($accesses->get($category->id), $canAccessAll),
             ]);
 
         return response()->json(['categories' => $categories]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('flashcard_categories', 'name')->where(fn ($query) => $request->filled('parent_id')
+                    ? $query->where('parent_id', $request->input('parent_id'))
+                    : $query->whereNull('parent_id')),
+            ],
+            'parent_id' => ['nullable', 'integer', 'exists:flashcard_categories,id'],
+        ]);
+
+        if (! empty($data['parent_id'])) {
+            $parent = FlashcardCategory::query()->findOrFail($data['parent_id']);
+            $parentAccess = $this->accessFor($request, $parent);
+            abort_unless($parentAccess->can_edit, 403);
+        }
+
+        $category = DB::transaction(function () use ($request, $data) {
+            $category = FlashcardCategory::query()->create([
+                'parent_id' => $data['parent_id'] ?? null,
+                'name' => $data['name'],
+            ]);
+
+            CategoryAccess::query()->create([
+                'user_id' => $request->user()->id,
+                'flashcard_category_id' => $category->id,
+                'can_edit' => true,
+                'steps' => CategoryAccess::DEFAULT_STEPS,
+            ]);
+
+            return $category;
+        });
+
+        return response()->json([
+            'category' => [
+                'id' => $category->id,
+                'parent_id' => $category->parent_id,
+                'name' => $category->name,
+                'flashcards_count' => 0,
+                'access' => [
+                    'can_edit' => true,
+                    'steps' => CategoryAccess::DEFAULT_STEPS,
+                ],
+            ],
+        ], 201);
     }
 
     public function show(Request $request, FlashcardCategory $category): JsonResponse
@@ -113,9 +170,45 @@ class CategoryController extends Controller
 
     private function accessFor(Request $request, FlashcardCategory $category): CategoryAccess
     {
-        return CategoryAccess::query()
+        $access = CategoryAccess::query()
             ->where('user_id', $request->user()->id)
             ->where('flashcard_category_id', $category->id)
-            ->firstOrFail();
+            ->first();
+
+        if ($access) {
+            return $access;
+        }
+
+        abort_unless($request->user()->hasRole('accessAllCategories'), 404);
+
+        return CategoryAccess::query()->firstOrCreate(
+            [
+                'user_id' => $request->user()->id,
+                'flashcard_category_id' => $category->id,
+            ],
+            [
+                'can_edit' => false,
+                'steps' => CategoryAccess::DEFAULT_STEPS,
+            ],
+        );
+    }
+
+    private function accessPayloadForIndex(?CategoryAccess $access, bool $canAccessAll): ?array
+    {
+        if ($access) {
+            return [
+                'can_edit' => $access->can_edit,
+                'steps' => $this->leitner->steps($access),
+            ];
+        }
+
+        if (! $canAccessAll) {
+            return null;
+        }
+
+        return [
+            'can_edit' => false,
+            'steps' => CategoryAccess::DEFAULT_STEPS,
+        ];
     }
 }

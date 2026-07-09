@@ -1,7 +1,15 @@
 <script setup>
-import { reactive, ref, watchEffect } from 'vue';
-import { CheckCircleIcon, KeyIcon, UserIcon } from '@heroicons/vue/24/outline';
+import { computed, reactive, ref, watchEffect } from 'vue';
+import {
+    CheckCircleIcon,
+    ComputerDesktopIcon,
+    KeyIcon,
+    MoonIcon,
+    SunIcon,
+    UserIcon,
+} from '@heroicons/vue/24/outline';
 import { auth } from '../stores/auth';
+import { theme } from '../stores/theme';
 
 const activeTab = ref('general');
 const saving = ref(false);
@@ -18,6 +26,19 @@ const passwordForm = reactive({
     password: '',
     password_confirmation: '',
 });
+
+const themeOptions = [
+    { mode: 'light', label: 'روشن', icon: SunIcon },
+    { mode: 'dark', label: 'تاریک', icon: MoonIcon },
+    { mode: 'system', label: 'سیستم', icon: ComputerDesktopIcon },
+];
+const currentThemeOption = computed(() => themeOptions.find((option) => option.mode === theme.mode) || themeOptions[0]);
+
+function cycleTheme() {
+    const index = themeOptions.findIndex((option) => option.mode === theme.mode);
+    const next = themeOptions[(index + 1) % themeOptions.length];
+    theme.set(next.mode);
+}
 
 watchEffect(() => {
     if (auth.user) {
@@ -67,12 +88,23 @@ async function savePassword() {
 
 <template>
     <section class="mx-auto max-w-4xl px-4 py-8">
-        <div class="mb-6 flex items-center gap-4">
-            <img :src="auth.user?.avatar_url" alt="" class="h-16 w-16 rounded-full bg-neutral-200 ring-1 ring-slate-200 dark:ring-neutral-800">
-            <div>
-                <h1 class="text-2xl font-bold">پروفایل</h1>
-                <p class="mt-1 text-sm text-slate-500 dark:text-neutral-400">{{ auth.user?.email }}</p>
+        <div class="mb-6 flex items-center justify-between gap-4">
+            <div class="flex min-w-0 items-center gap-4">
+                <img :src="auth.user?.avatar_url" alt="" class="h-16 w-16 rounded-full bg-neutral-200 ring-1 ring-slate-200 dark:ring-neutral-800">
+                <div class="min-w-0">
+                    <h1 class="text-2xl font-bold">پروفایل</h1>
+                    <p class="mt-1 truncate text-sm text-slate-500 dark:text-neutral-400">{{ auth.user?.email }}</p>
+                </div>
             </div>
+            <button
+                class="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
+                type="button"
+                :title="`تم: ${currentThemeOption.label}`"
+                :aria-label="`تم: ${currentThemeOption.label}`"
+                @click="cycleTheme"
+            >
+                <component :is="currentThemeOption.icon" class="h-5 w-5" />
+            </button>
         </div>
 
         <div class="mb-5 flex gap-2 border-b border-slate-200 dark:border-neutral-800">

@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import {
     CheckCircleIcon,
     ClockIcon,
+    EyeIcon,
     PencilSquareIcon,
     PlayIcon,
     PlusIcon,
@@ -155,7 +156,7 @@ onMounted(fetchCategory);
                 <article
                     v-for="summary in studySteps"
                     :key="summary.index"
-                    class="grid min-h-36 grid-cols-[2.75rem_minmax(0,1fr)_8rem] items-center gap-0 max-md:grid-cols-[2.5rem_minmax(0,1fr)_5rem] max-md:min-h-28"
+                    class="grid min-h-36 grid-cols-[6rem_minmax(0,1fr)_8rem] items-center gap-0 max-md:grid-cols-[5.5rem_minmax(0,1fr)_5rem] max-md:min-h-28"
                     dir="ltr"
                 >
                     <div class="relative h-16 self-start max-md:h-14">
@@ -176,13 +177,30 @@ onMounted(fetchCategory);
                         >
                             <PlayIcon class="h-5 w-5" />
                         </button>
+                        <RouterLink
+                            v-if="summary.total_count > 0"
+                            :to="{ name: 'step-cards', params: { id: page.category.id, step: summary.index } }"
+                            class="absolute left-[3.25rem] top-2 grid h-11 w-11 place-items-center rounded-md border border-primary-200 bg-white text-primary-700 shadow-sm hover:border-primary-400 hover:bg-primary-50 dark:border-neutral-700 dark:bg-neutral-950 dark:text-primary-300 dark:hover:border-primary-600 max-md:left-12 max-md:top-0 max-md:h-10 max-md:w-10"
+                            title="مشاهده کارت‌های گام"
+                        >
+                            <EyeIcon class="h-5 w-5" />
+                        </RouterLink>
+                        <button
+                            v-else
+                            class="absolute left-[3.25rem] top-2 grid h-11 w-11 place-items-center rounded-md border border-slate-200 text-slate-300 dark:border-neutral-800 dark:text-neutral-600 max-md:left-12 max-md:top-0 max-md:h-10 max-md:w-10"
+                            type="button"
+                            disabled
+                            title="کارتی در این گام نیست"
+                        >
+                            <EyeIcon class="h-5 w-5" />
+                        </button>
                     </div>
 
                     <div class="relative h-32 min-w-0 max-md:h-24">
                         <div class="absolute right-2 top-3 max-w-64 truncate text-right text-sm font-extrabold text-slate-900 dark:text-neutral-100 max-md:top-1 max-md:max-w-36 max-md:text-xs" dir="rtl">
                             {{ delayLabel(summary) }}
                         </div>
-                        <div class="absolute -left-11 right-0 top-16 h-1 -translate-y-1/2 rounded-full bg-slate-500 dark:bg-neutral-700 max-md:-left-10 max-md:top-12 max-md:h-px" />
+                        <div class="absolute -left-24 right-0 top-16 h-1 -translate-y-1/2 rounded-full bg-slate-500 dark:bg-neutral-700 max-md:-left-20 max-md:top-12 max-md:h-px" />
                         <div class="absolute inset-x-0 top-20 flex justify-center gap-12 max-md:top-[3.75rem] max-md:gap-5" dir="rtl">
                             <div class="flex items-center gap-2 whitespace-nowrap text-sm font-black text-amber-700 dark:text-amber-300 max-md:gap-1 max-md:text-xs" title="در انتظار موعد">
                                 <ClockIcon class="h-5 w-5" />

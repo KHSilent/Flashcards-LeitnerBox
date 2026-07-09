@@ -36,6 +36,28 @@ class StudyController extends Controller
         ]);
     }
 
+    public function stepCards(Request $request, FlashcardCategory $category): JsonResponse
+    {
+        $data = $request->validate([
+            'step' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $access = $this->accessFor($request, $category);
+        $cards = $this->leitner->stepCards($access, $data['step'])->map(fn (StudyCard $studyCard) => $this->cardPayload($studyCard));
+
+        return response()->json([
+            'category' => [
+                'id' => $category->id,
+                'name' => $category->name,
+            ],
+            'access' => [
+                'steps' => $this->leitner->steps($access),
+            ],
+            'step' => $data['step'],
+            'cards' => $cards,
+        ]);
+    }
+
     public function answer(Request $request, FlashcardCategory $category, StudyCard $studyCard): JsonResponse
     {
         $data = $request->validate([
@@ -54,10 +76,27 @@ class StudyController extends Controller
 
     private function accessFor(Request $request, FlashcardCategory $category): CategoryAccess
     {
-        return CategoryAccess::query()
+        $access = CategoryAccess::query()
             ->where('user_id', $request->user()->id)
             ->where('flashcard_category_id', $category->id)
-            ->firstOrFail();
+            ->first();
+
+        if ($access) {
+            return $access;
+        }
+
+        abort_unless($request->user()->hasRole('accessAllCategories'), 404);
+
+        return CategoryAccess::query()->firstOrCreate(
+            [
+                'user_id' => $request->user()->id,
+                'flashcard_category_id' => $category->id,
+            ],
+            [
+                'can_edit' => false,
+                'steps' => CategoryAccess::DEFAULT_STEPS,
+            ],
+        );
     }
 
     private function cardPayload(StudyCard $studyCard): array

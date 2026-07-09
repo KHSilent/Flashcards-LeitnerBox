@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\CategoryAccess;
 use App\Models\Flashcard;
-use App\Models\FlashcardCategory;
 use App\Models\StudyCard;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,28 +14,14 @@ use Illuminate\Validation\ValidationException;
 
 class LeitnerService
 {
-    public function categoryIdsWithDescendants(FlashcardCategory $category): array
-    {
-        $ids = [$category->id];
-        $children = FlashcardCategory::query()
-            ->where('parent_id', $category->id)
-            ->get(['id', 'parent_id']);
-
-        foreach ($children as $child) {
-            array_push($ids, ...$this->categoryIdsWithDescendants($child));
-        }
-
-        return array_values(array_unique($ids));
-    }
-
     public function summaries(CategoryAccess $access): array
     {
         $steps = $this->steps($access);
-        $categoryIds = $this->categoryIdsWithDescendants($access->category);
+        $categoryId = $access->flashcard_category_id;
         $now = now();
 
         $unintroduced = Flashcard::query()
-            ->whereIn('flashcard_category_id', $categoryIds)
+            ->where('flashcard_category_id', $categoryId)
             ->whereDoesntHave('studyCards', fn (Builder $query) => $query->where('category_access_id', $access->id))
             ->count();
 
@@ -54,13 +39,13 @@ class LeitnerService
             $total = StudyCard::query()
                 ->where('category_access_id', $access->id)
                 ->where('step_index', $index)
-                ->whereHas('flashcard', fn (Builder $query) => $query->whereIn('flashcard_category_id', $categoryIds))
+                ->whereHas('flashcard', fn (Builder $query) => $query->where('flashcard_category_id', $categoryId))
                 ->count();
 
             $due = StudyCard::query()
                 ->where('category_access_id', $access->id)
                 ->where('step_index', $index)
-                ->whereHas('flashcard', fn (Builder $query) => $query->whereIn('flashcard_category_id', $categoryIds))
+                ->whereHas('flashcard', fn (Builder $query) => $query->where('flashcard_category_id', $categoryId))
                 ->when($index > 0, fn (Builder $query) => $query->where('due_at', '<=', $now))
                 ->count();
 
@@ -80,12 +65,12 @@ class LeitnerService
 
     public function introduce(CategoryAccess $access, int $count): int
     {
-        $categoryIds = $this->categoryIdsWithDescendants($access->category);
+        $categoryId = $access->flashcard_category_id;
         $now = now();
 
-        return DB::transaction(function () use ($access, $categoryIds, $count, $now) {
+        return DB::transaction(function () use ($access, $categoryId, $count, $now) {
             $flashcards = Flashcard::query()
-                ->whereIn('flashcard_category_id', $categoryIds)
+                ->where('flashcard_category_id', $categoryId)
                 ->whereDoesntHave('studyCards', fn (Builder $query) => $query->where('category_access_id', $access->id))
                 ->orderBy('id')
                 ->limit($count)
@@ -108,14 +93,29 @@ class LeitnerService
     public function dueCards(CategoryAccess $access, int $stepIndex): Collection
     {
         $this->guardStepExists($access, $stepIndex);
-        $categoryIds = $this->categoryIdsWithDescendants($access->category);
+        $categoryId = $access->flashcard_category_id;
 
         return StudyCard::query()
             ->with(['flashcard.sides'])
             ->where('category_access_id', $access->id)
             ->where('step_index', $stepIndex)
-            ->whereHas('flashcard', fn (Builder $query) => $query->whereIn('flashcard_category_id', $categoryIds))
+            ->whereHas('flashcard', fn (Builder $query) => $query->where('flashcard_category_id', $categoryId))
             ->when($stepIndex > 0, fn (Builder $query) => $query->where('due_at', '<=', now()))
+            ->orderBy('due_at')
+            ->orderBy('id')
+            ->get();
+    }
+
+    public function stepCards(CategoryAccess $access, int $stepIndex): Collection
+    {
+        $this->guardStepExists($access, $stepIndex);
+        $categoryId = $access->flashcard_category_id;
+
+        return StudyCard::query()
+            ->with(['flashcard.sides'])
+            ->where('category_access_id', $access->id)
+            ->where('step_index', $stepIndex)
+            ->whereHas('flashcard', fn (Builder $query) => $query->where('flashcard_category_id', $categoryId))
             ->orderBy('due_at')
             ->orderBy('id')
             ->get();

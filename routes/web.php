@@ -19,6 +19,7 @@ Route::prefix('api')->group(function () {
         Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
 
         Route::get('/categories', [CategoryController::class, 'index']);
+        Route::post('/categories', [CategoryController::class, 'store']);
         Route::get('/categories/{category}', [CategoryController::class, 'show']);
         Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
         Route::post('/categories/{category}/introduce', [CategoryController::class, 'introduce']);
@@ -30,9 +31,11 @@ Route::prefix('api')->group(function () {
         Route::delete('/categories/{category}/flashcards/{flashcard}', [FlashcardController::class, 'destroy']);
 
         Route::get('/categories/{category}/study', [StudyController::class, 'index']);
+        Route::get('/categories/{category}/study-cards', [StudyController::class, 'stepCards']);
         Route::post('/categories/{category}/study-cards/{studyCard}/answer', [StudyController::class, 'answer']);
 
-        Route::apiResource('users', UserController::class)->except(['show']);
+        Route::put('/users/{user}/category-accesses', [UserController::class, 'updateCategoryAccesses']);
+        Route::apiResource('users', UserController::class);
     });
 });
 

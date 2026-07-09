@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import { PencilSquareIcon, PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import { auth } from '../stores/auth';
 
@@ -8,7 +8,6 @@ const saving = ref(false);
 const modalOpen = ref(false);
 const users = ref([]);
 const roles = ref([]);
-const editingId = ref(null);
 const error = ref('');
 const message = ref('');
 const pagination = reactive({
@@ -28,14 +27,11 @@ const form = reactive({
     roles: [],
 });
 
-const editingUser = computed(() => users.value.find((user) => user.id === editingId.value));
-
 function firstError(exception, fallback) {
     return exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || fallback;
 }
 
 function resetForm() {
-    editingId.value = null;
     form.name = '';
     form.email = '';
     form.password = '';
@@ -45,16 +41,6 @@ function resetForm() {
 
 function openCreateModal() {
     resetForm();
-    modalOpen.value = true;
-}
-
-function openEditModal(user) {
-    editingId.value = user.id;
-    form.name = user.name;
-    form.email = user.email;
-    form.password = '';
-    form.is_active = user.is_active;
-    form.roles = [...(user.roles || [])];
     modalOpen.value = true;
 }
 
@@ -101,19 +87,9 @@ async function saveUser() {
     }
 
     try {
-        if (editingId.value) {
-            const { data } = await window.axios.put(`/api/users/${editingId.value}`, payload);
-            if (auth.user?.id === data.user.id) {
-                auth.user = data.user;
-            }
-            message.value = 'کاربر ویرایش شد.';
-            await fetchUsers(pagination.current_page);
-        } else {
-            await window.axios.post('/api/users', { ...payload, password: form.password });
-            message.value = 'کاربر اضافه شد.';
-            await fetchUsers(1);
-        }
-
+        await window.axios.post('/api/users', { ...payload, password: form.password });
+        message.value = 'کاربر اضافه شد.';
+        await fetchUsers(1);
         closeModal();
     } catch (exception) {
         error.value = firstError(exception, 'ذخیره کاربر انجام نشد.');
@@ -217,9 +193,9 @@ onMounted(() => fetchUsers(1));
                     </div>
 
                     <div class="flex items-center gap-2">
-                        <button class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300" type="button" title="ویرایش" @click="openEditModal(user)">
+                        <RouterLink class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300" :to="{ name: 'user-edit', params: { id: user.id } }" title="ویرایش">
                             <PencilSquareIcon class="h-5 w-5" />
-                        </button>
+                        </RouterLink>
                         <button class="h-10 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-600 hover:border-primary-400 hover:text-primary-700 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300" type="button" :disabled="user.id === auth.user?.id || saving" @click="toggleUser(user)">
                             {{ user.is_active ? 'غیرفعال' : 'فعال' }}
                         </button>
@@ -266,9 +242,8 @@ onMounted(() => fetchUsers(1));
             <form class="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-950" @submit.prevent="saveUser">
                 <header class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-neutral-800">
                     <div class="flex items-center gap-2">
-                        <PlusIcon v-if="!editingId" class="h-5 w-5 text-primary-600" />
-                        <PencilSquareIcon v-else class="h-5 w-5 text-primary-600" />
-                        <h2 class="text-lg font-bold">{{ editingId ? 'ویرایش کاربر' : 'کاربر جدید' }}</h2>
+                        <PlusIcon class="h-5 w-5 text-primary-600" />
+                        <h2 class="text-lg font-bold">کاربر جدید</h2>
                     </div>
                     <button class="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-neutral-900" type="button" aria-label="بستن" @click="closeModal">
                         <XMarkIcon class="h-5 w-5" />
@@ -286,7 +261,7 @@ onMounted(() => fetchUsers(1));
                     </label>
                     <label class="block">
                         <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">رمز عبور</span>
-                        <input v-model="form.password" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" type="password" :required="!editingId" minlength="8">
+                        <input v-model="form.password" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" type="password" required minlength="8">
                     </label>
 
                     <label class="flex items-center gap-2 text-sm font-semibold">
@@ -302,9 +277,6 @@ onMounted(() => fetchUsers(1));
                         </label>
                     </div>
 
-                    <p v-if="editingUser?.id === auth.user?.id" class="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-                        دارید حساب خودتان را ویرایش می‌کنید؛ حذف و غیرفعال‌سازی خودکار مسدود است.
-                    </p>
                 </div>
 
                 <footer class="flex justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-neutral-800">

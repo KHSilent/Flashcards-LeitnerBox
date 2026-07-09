@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\CategoryAccess;
+use App\Models\Flashcard;
+use App\Models\FlashcardCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -85,5 +88,70 @@ class UserManagementTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/users')
             ->assertForbidden();
+    }
+
+    public function test_manager_can_edit_user_category_accesses(): void
+    {
+        $manager = User::factory()->create([
+            'is_active' => true,
+            'roles' => ['manageUser'],
+        ]);
+        $member = User::factory()->create([
+            'is_active' => true,
+            'roles' => [],
+        ]);
+        $category = FlashcardCategory::query()->create(['name' => 'Assigned']);
+        $removedCategory = FlashcardCategory::query()->create(['name' => 'Removed']);
+
+        CategoryAccess::query()->create([
+            'user_id' => $member->id,
+            'flashcard_category_id' => $category->id,
+            'can_edit' => true,
+            'steps' => [2, 4],
+        ]);
+        $removedAccess = CategoryAccess::query()->create([
+            'user_id' => $member->id,
+            'flashcard_category_id' => $removedCategory->id,
+            'can_edit' => true,
+            'steps' => [3, 6],
+        ]);
+        $flashcard = Flashcard::query()->create([
+            'flashcard_category_id' => $removedCategory->id,
+            'title' => 'Removed study card',
+        ]);
+        $removedStudyCard = $removedAccess->studyCards()->create([
+            'flashcard_id' => $flashcard->id,
+            'step_index' => 0,
+            'entered_at' => now(),
+            'due_at' => now(),
+        ]);
+
+        $this->actingAs($manager)
+            ->getJson("/api/users/{$member->id}")
+            ->assertOk()
+            ->assertJsonPath('user.id', $member->id)
+            ->assertJsonCount(2, 'categories');
+
+        $this->actingAs($manager)
+            ->putJson("/api/users/{$member->id}/category-accesses", [
+                'accesses' => [
+                    ['category_id' => $category->id, 'has_access' => true, 'can_edit' => false],
+                    ['category_id' => $removedCategory->id, 'has_access' => false, 'can_edit' => false],
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('category_accesses', [
+            'user_id' => $member->id,
+            'flashcard_category_id' => $category->id,
+            'can_edit' => false,
+        ]);
+        $this->assertDatabaseMissing('category_accesses', [
+            'user_id' => $member->id,
+            'flashcard_category_id' => $removedCategory->id,
+        ]);
+        $this->assertDatabaseMissing('study_cards', [
+            'id' => $removedStudyCard->id,
+        ]);
     }
 }

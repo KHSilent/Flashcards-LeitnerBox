@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CategoryAccess;
+use App\Models\FlashcardCategory;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    private const AVAILABLE_ROLES = ['manageUser'];
+    private const AVAILABLE_ROLES = ['manageUser', 'accessAllCategories'];
 
     public function index(Request $request): JsonResponse
     {
@@ -52,6 +55,17 @@ class UserController extends Controller
         return response()->json(['user' => user_payload($user)], 201);
     }
 
+    public function show(Request $request, User $user): JsonResponse
+    {
+        $this->authorizeManageUsers($request);
+
+        return response()->json([
+            'user' => user_payload($user),
+            'roles' => self::AVAILABLE_ROLES,
+            'categories' => $this->categoryAccessPayload($user),
+        ]);
+    }
+
     public function update(Request $request, User $user): JsonResponse
     {
         $this->authorizeManageUsers($request);
@@ -91,6 +105,60 @@ class UserController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function updateCategoryAccesses(Request $request, User $user): JsonResponse
+    {
+        $this->authorizeManageUsers($request);
+
+        $data = $request->validate([
+            'accesses' => ['present', 'array'],
+            'accesses.*.category_id' => ['required', 'integer', 'exists:flashcard_categories,id', 'distinct'],
+            'accesses.*.has_access' => ['required', 'boolean'],
+            'accesses.*.can_edit' => ['required', 'boolean'],
+        ]);
+
+        DB::transaction(function () use ($user, $data) {
+            $requested = collect($data['accesses'])->keyBy('category_id');
+
+            CategoryAccess::query()
+                ->where('user_id', $user->id)
+                ->get()
+                ->each(function (CategoryAccess $access) use ($requested) {
+                    $item = $requested->get($access->flashcard_category_id);
+                    $hasAccess = $item && ((bool) $item['has_access'] || (bool) $item['can_edit']);
+
+                    if ($hasAccess) {
+                        return;
+                    }
+
+                    $access->studyCards()->delete();
+                    $access->delete();
+                });
+
+            foreach ($requested as $item) {
+                $hasAccess = (bool) $item['has_access'] || (bool) $item['can_edit'];
+
+                if (! $hasAccess) {
+                    continue;
+                }
+
+                $access = CategoryAccess::query()->firstOrNew([
+                    'user_id' => $user->id,
+                    'flashcard_category_id' => $item['category_id'],
+                ]);
+
+                $access->can_edit = (bool) $item['can_edit'];
+                if ($access->steps === null) {
+                    $access->steps = CategoryAccess::DEFAULT_STEPS;
+                }
+                $access->save();
+            }
+        });
+
+        return response()->json([
+            'categories' => $this->categoryAccessPayload($user->refresh()),
+        ]);
+    }
+
     private function authorizeManageUsers(Request $request): void
     {
         abort_unless($request->user()?->hasRole('manageUser'), 403);
@@ -113,6 +181,29 @@ class UserController extends Controller
         return collect($roles)
             ->filter(fn (string $role) => in_array($role, self::AVAILABLE_ROLES, true))
             ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function categoryAccessPayload(User $user): array
+    {
+        $accesses = CategoryAccess::query()
+            ->where('user_id', $user->id)
+            ->get()
+            ->keyBy('flashcard_category_id');
+
+        return FlashcardCategory::query()
+            ->withCount('flashcards')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (FlashcardCategory $category) => [
+                'id' => $category->id,
+                'parent_id' => $category->parent_id,
+                'name' => $category->name,
+                'flashcards_count' => $category->flashcards_count,
+                'has_access' => $accesses->has($category->id),
+                'can_edit' => (bool) $accesses->get($category->id)?->can_edit,
+            ])
             ->values()
             ->all();
     }
