@@ -47,10 +47,10 @@ class LeitnerFlowTest extends TestCase
         $this->actingAs($user)
             ->getJson("/api/categories/{$category->id}/study?step=0")
             ->assertOk()
-            ->assertJsonPath('cards.0.flashcard.sides.0.images.0', 'front.jpg')
-            ->assertJsonPath('cards.0.flashcard.sides.0.audios.0', 'front.mp3')
-            ->assertJsonPath('cards.0.flashcard.sides.1.images.0', 'back.jpg')
-            ->assertJsonPath('cards.0.flashcard.sides.1.audios.0', 'back.mp3');
+            ->assertJsonPath('cards.0.flashcard.sides.0.images.0', url('/storage/front.jpg'))
+            ->assertJsonPath('cards.0.flashcard.sides.0.audios.0', url('/storage/front.mp3'))
+            ->assertJsonPath('cards.0.flashcard.sides.1.images.0', url('/storage/back.jpg'))
+            ->assertJsonPath('cards.0.flashcard.sides.1.audios.0', url('/storage/back.mp3'));
 
         $this->actingAs($user)
             ->postJson("/api/categories/{$category->id}/study-cards/{$studyCard->id}/answer", ['action' => 'known'])

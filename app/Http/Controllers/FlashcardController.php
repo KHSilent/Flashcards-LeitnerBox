@@ -5,15 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\CategoryAccess;
 use App\Models\Flashcard;
 use App\Models\FlashcardCategory;
+use App\Services\SmartFlashcardProcessor;
+use App\Support\FlashcardMedia;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Validation\Rule;
 
 class FlashcardController extends Controller
 {
+    public function __construct(private readonly SmartFlashcardProcessor $smartProcessor) {}
+
     public function index(Request $request, FlashcardCategory $category): JsonResponse
     {
         $this->editableAccess($request, $category);
@@ -88,6 +91,16 @@ class FlashcardController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function smartProcess(Request $request, FlashcardCategory $category, Flashcard $flashcard): JsonResponse
+    {
+        $this->editableAccess($request, $category);
+        $this->guardFlashcardBelongsToCategory($category, $flashcard);
+
+        $flashcard = $this->smartProcessor->process($flashcard);
+
+        return response()->json(['flashcard' => $this->payload($flashcard)]);
+    }
+
     private function editableAccess(Request $request, FlashcardCategory $category): CategoryAccess
     {
         $access = CategoryAccess::query()
@@ -133,11 +146,11 @@ class FlashcardController extends Controller
                 'side_number' => (int) $side['side_number'],
                 'content' => $side['content'],
                 'images' => [
-                    ...array_values(array_filter($side['images'] ?? [])),
+                    ...FlashcardMedia::normalizeMany($side['images'] ?? []),
                     ...$this->storeUploads($side['image_files'] ?? [], 'images'),
                 ],
                 'audios' => [
-                    ...array_values(array_filter($side['audios'] ?? [])),
+                    ...FlashcardMedia::normalizeMany($side['audios'] ?? []),
                     ...$this->storeUploads($side['audio_files'] ?? [], 'audios'),
                 ],
             ]);
@@ -150,17 +163,9 @@ class FlashcardController extends Controller
      */
     private function storeUploads(array $files, string $type): array
     {
-        $target = public_path("uploads/flashcards/{$type}");
-        File::ensureDirectoryExists($target);
-
         return collect($files)
             ->filter(fn ($file) => $file instanceof UploadedFile)
-            ->map(function (UploadedFile $file) use ($target, $type) {
-                $name = $file->hashName();
-                $file->move($target, $name);
-
-                return "/uploads/flashcards/{$type}/{$name}";
-            })
+            ->map(fn (UploadedFile $file) => $file->storePublicly("flashcards/{$type}", 'public'))
             ->values()
             ->all();
     }
@@ -176,8 +181,10 @@ class FlashcardController extends Controller
                 'id' => $side->id,
                 'side_number' => $side->side_number,
                 'content' => $side->content,
-                'images' => $side->images ?: [],
-                'audios' => $side->audios ?: [],
+                'images' => FlashcardMedia::urls($side->images),
+                'audios' => FlashcardMedia::urls($side->audios),
+                'raw_images' => array_values($side->images ?: []),
+                'raw_audios' => array_values($side->audios ?: []),
             ])->values(),
         ];
     }

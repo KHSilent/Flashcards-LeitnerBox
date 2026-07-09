@@ -10,6 +10,7 @@ import {
     PhotoIcon,
     SpeakerWaveIcon,
 } from '@heroicons/vue/24/outline';
+import AutoDirContent from '../components/AutoDirContent.vue';
 
 const route = useRoute();
 const loading = ref(true);
@@ -216,7 +217,7 @@ onMounted(fetchCards);
                     </div>
 
                     <div class="p-5">
-                        <div class="whitespace-pre-line text-lg leading-9 text-slate-950 dark:text-neutral-100">{{ currentSide.content }}</div>
+                        <AutoDirContent :text="currentSide.content" line-class="text-lg leading-9 text-slate-950 dark:text-neutral-100" />
 
                         <div v-if="currentSide.images?.length" class="mt-5 grid gap-3 sm:grid-cols-2">
                             <a

@@ -6,6 +6,7 @@ use App\Models\CategoryAccess;
 use App\Models\FlashcardCategory;
 use App\Models\StudyCard;
 use App\Services\LeitnerService;
+use App\Support\FlashcardMedia;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -114,8 +115,8 @@ class StudyController extends Controller
                     'id' => $side->id,
                     'side_number' => $side->side_number,
                     'content' => $side->content,
-                    'images' => $side->images ?: [],
-                    'audios' => $side->audios ?: [],
+                    'images' => FlashcardMedia::urls($side->images),
+                    'audios' => FlashcardMedia::urls($side->audios),
                 ]),
             ],
         ];

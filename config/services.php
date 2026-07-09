@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+        'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+        'text_model' => env('OPENAI_TEXT_MODEL', 'gpt-4.1-mini'),
+        'image_model' => env('OPENAI_IMAGE_MODEL', 'gpt-image-1'),
+        'tts_model' => env('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'),
+        'tts_voice' => env('OPENAI_TTS_VOICE', 'marin'),
+    ],
+
 ];

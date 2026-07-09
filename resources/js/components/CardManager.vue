@@ -1,12 +1,16 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import {
+    ArrowPathIcon,
+    EyeIcon,
     PencilSquareIcon,
     PlusIcon,
     QueueListIcon,
+    SparklesIcon,
     TrashIcon,
     XMarkIcon,
 } from '@heroicons/vue/24/outline';
+import AutoDirContent from './AutoDirContent.vue';
 
 const props = defineProps({
     categoryId: { type: Number, required: true },
@@ -16,8 +20,10 @@ const emit = defineEmits(['changed']);
 
 const loading = ref(true);
 const saving = ref(false);
+const smartProcessing = ref(false);
 const modalOpen = ref(false);
 const editingId = ref(null);
+const previewCard = ref(null);
 const error = ref('');
 const message = ref('');
 const flashcards = ref([]);
@@ -41,6 +47,7 @@ const form = reactive({
 });
 
 const editingCard = computed(() => flashcards.value.find((card) => card.id === editingId.value));
+const canSmartProcessPreview = computed(() => ['english-active', 'english-passive'].includes(previewCard.value?.type));
 
 function firstError(exception, fallback) {
     return exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || fallback;
@@ -86,8 +93,8 @@ function openEditModal(card) {
     form.sides = card.sides.map((side) => ({
         side_number: side.side_number,
         content: side.content,
-        images_text: (side.images || []).join('\n'),
-        audios_text: (side.audios || []).join('\n'),
+        images_text: (side.raw_images || side.images || []).join('\n'),
+        audios_text: (side.raw_audios || side.audios || []).join('\n'),
         image_files: [],
         audio_files: [],
     }));
@@ -97,6 +104,14 @@ function openEditModal(card) {
 function closeModal() {
     modalOpen.value = false;
     resetForm();
+}
+
+function openPreview(card) {
+    previewCard.value = card;
+}
+
+function closePreview() {
+    previewCard.value = null;
 }
 
 function addSide() {
@@ -223,6 +238,29 @@ async function deleteCard(card) {
     }
 }
 
+async function smartProcess(card) {
+    smartProcessing.value = true;
+    error.value = '';
+    message.value = '';
+
+    try {
+        const { data } = await window.axios.post(`/api/categories/${props.categoryId}/flashcards/${card.id}/smart-process`);
+        const index = flashcards.value.findIndex((item) => item.id === card.id);
+
+        if (index !== -1) {
+            flashcards.value.splice(index, 1, data.flashcard);
+        }
+
+        previewCard.value = data.flashcard;
+        message.value = 'پردازش هوشمند انجام شد.';
+        emit('changed');
+    } catch (exception) {
+        error.value = firstError(exception, 'پردازش هوشمند انجام نشد.');
+    } finally {
+        smartProcessing.value = false;
+    }
+}
+
 onMounted(() => fetchCards(1));
 </script>
 
@@ -278,6 +316,14 @@ onMounted(() => fetchCards(1));
                     </div>
 
                     <div class="flex items-center gap-2">
+                        <button
+                            class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
+                            type="button"
+                            title="پیش‌نمایش"
+                            @click="openPreview(card)"
+                        >
+                            <EyeIcon class="h-5 w-5" />
+                        </button>
                         <button
                             class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
                             type="button"
@@ -389,7 +435,7 @@ onMounted(() => fetchCards(1));
 
                         <label class="mb-3 block">
                             <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">متن</span>
-                            <textarea v-model="side.content" class="min-h-28 w-full rounded-md border border-slate-200 bg-white px-3 py-2 leading-7 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" required />
+                            <textarea v-model="side.content" class="min-h-28 w-full rounded-md border border-slate-200 bg-white px-3 py-2 leading-7 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="auto" required />
                         </label>
 
                         <div class="grid gap-3 md:grid-cols-2">
@@ -446,6 +492,84 @@ onMounted(() => fetchCards(1));
                     </button>
                 </footer>
             </form>
+        </div>
+
+        <div v-if="previewCard" class="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8">
+            <section class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-950">
+                <header class="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 dark:border-neutral-800 dark:bg-neutral-950">
+                    <div class="min-w-0">
+                        <div class="mb-2 flex flex-wrap items-center gap-2">
+                            <h2 class="truncate text-lg font-bold">{{ previewCard.title || `کارت ${previewCard.id}` }}</h2>
+                            <span class="rounded-md bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700 dark:bg-neutral-900 dark:text-primary-300">
+                                {{ typeLabel(previewCard.type) }}
+                            </span>
+                            <span class="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-neutral-900 dark:text-neutral-300">
+                                {{ previewCard.sides.length }} رو
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-neutral-400">پیش‌نمایش کارت</p>
+                    </div>
+                    <div class="flex shrink-0 items-center gap-2">
+                        <button
+                            v-if="canSmartProcessPreview"
+                            class="inline-flex h-9 items-center gap-2 rounded-md bg-primary-600 px-3 text-xs font-bold text-white hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60"
+                            type="button"
+                            :disabled="smartProcessing"
+                            @click="smartProcess(previewCard)"
+                        >
+                            <ArrowPathIcon v-if="smartProcessing" class="h-4 w-4 animate-spin" />
+                            <SparklesIcon v-else class="h-4 w-4" />
+                            پردازش هوشمند
+                        </button>
+                        <button class="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-neutral-900" type="button" aria-label="بستن" @click="closePreview">
+                            <XMarkIcon class="h-5 w-5" />
+                        </button>
+                    </div>
+                </header>
+
+                <div class="space-y-4 p-5">
+                    <article
+                        v-for="side in previewCard.sides"
+                        :key="side.id || side.side_number"
+                        class="overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-neutral-800 dark:bg-black"
+                    >
+                        <header class="border-b border-slate-200 px-4 py-3 dark:border-neutral-800">
+                            <h3 class="text-sm font-bold text-slate-700 dark:text-neutral-200">روی {{ side.side_number }}</h3>
+                        </header>
+
+                        <div class="space-y-4 p-4">
+                            <AutoDirContent :text="side.content" line-class="text-base leading-8 text-slate-950 dark:text-neutral-100" />
+
+                            <div v-if="side.images?.length" class="grid gap-3 sm:grid-cols-2">
+                                <a
+                                    v-for="image in side.images"
+                                    :key="image"
+                                    :href="image"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-950"
+                                >
+                                    <img :src="image" :alt="`روی ${side.side_number}`" class="h-56 w-full object-contain" loading="lazy">
+                                </a>
+                            </div>
+
+                            <div v-if="side.audios?.length" class="space-y-3">
+                                <div
+                                    v-for="audio in side.audios"
+                                    :key="audio"
+                                    class="rounded-lg border border-slate-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-950"
+                                >
+                                    <audio class="w-full" controls :src="audio" preload="none" />
+                                    <a :href="audio" target="_blank" rel="noreferrer" class="mt-2 block truncate text-left text-xs font-semibold text-primary-700 dark:text-primary-300" dir="ltr">
+                                        {{ audio }}
+                                    </a>
+                                </div>
+                            </div>
+
+                        </div>
+                    </article>
+                </div>
+            </section>
         </div>
     </section>
 </template>

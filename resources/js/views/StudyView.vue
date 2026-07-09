@@ -12,6 +12,7 @@ import {
     TrophyIcon,
     XMarkIcon,
 } from '@heroicons/vue/24/outline';
+import AutoDirContent from '../components/AutoDirContent.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -86,6 +87,17 @@ function ignoresShortcuts(target) {
     return ['INPUT', 'SELECT', 'TEXTAREA', 'AUDIO', 'VIDEO', 'BUTTON'].includes(target?.tagName) || target?.isContentEditable;
 }
 
+function playCurrentAudio() {
+    const audio = document.querySelector('[data-study-current-audio]');
+
+    if (!audio) {
+        return;
+    }
+
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+}
+
 function handleShortcut(event) {
     if (!currentCard.value || submitting.value || customOpen.value || ignoresShortcuts(event.target)) {
         return;
@@ -114,6 +126,11 @@ function handleShortcut(event) {
     if (event.key === 'Backspace' || event.key === 'Delete') {
         event.preventDefault();
         answer('unknown');
+    }
+
+    if (event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        playCurrentAudio();
     }
 }
 
@@ -221,7 +238,7 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div class="p-5">
-                        <div class="whitespace-pre-line text-lg leading-9 text-slate-950 dark:text-neutral-100">{{ currentSide.content }}</div>
+                        <AutoDirContent :text="currentSide.content" line-class="text-lg leading-9 text-slate-950 dark:text-neutral-100" />
 
                         <div v-if="currentSide.images?.length" class="mt-5 grid gap-3 sm:grid-cols-2">
                             <a
@@ -247,7 +264,7 @@ onBeforeUnmount(() => {
                                 :key="audio"
                                 class="rounded-lg border border-slate-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-950"
                             >
-                                <audio class="w-full" controls :src="audio" preload="none" />
+                                <audio class="w-full" controls :src="audio" preload="none" data-study-current-audio />
                                 <a :href="audio" target="_blank" rel="noreferrer" class="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-primary-700 dark:text-primary-300">
                                     <SpeakerWaveIcon class="h-4 w-4" />
                                     فایل صدا

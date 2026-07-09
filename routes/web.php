@@ -26,6 +26,7 @@ Route::prefix('api')->group(function () {
         Route::put('/categories/{category}/steps', [CategoryController::class, 'updateSteps']);
         Route::get('/categories/{category}/flashcards', [FlashcardController::class, 'index']);
         Route::post('/categories/{category}/flashcards', [FlashcardController::class, 'store']);
+        Route::post('/categories/{category}/flashcards/{flashcard}/smart-process', [FlashcardController::class, 'smartProcess']);
         Route::post('/categories/{category}/flashcards/{flashcard}', [FlashcardController::class, 'update']);
         Route::put('/categories/{category}/flashcards/{flashcard}', [FlashcardController::class, 'update']);
         Route::delete('/categories/{category}/flashcards/{flashcard}', [FlashcardController::class, 'destroy']);

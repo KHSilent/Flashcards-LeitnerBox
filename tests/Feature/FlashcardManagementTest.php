@@ -8,6 +8,8 @@ use App\Models\FlashcardCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FlashcardManagementTest extends TestCase
@@ -46,7 +48,11 @@ class FlashcardManagementTest extends TestCase
         $this->actingAs($user)
             ->getJson("/api/categories/{$category->id}/flashcards")
             ->assertOk()
-            ->assertJsonPath('meta.total', 1);
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('flashcards.0.sides.1.images.0', url('/storage/image.jpg'))
+            ->assertJsonPath('flashcards.0.sides.1.audios.0', url('/storage/voice.mp3'))
+            ->assertJsonPath('flashcards.0.sides.1.raw_images.0', 'image.jpg')
+            ->assertJsonPath('flashcards.0.sides.1.raw_audios.0', 'voice.mp3');
 
         $this->actingAs($user)
             ->putJson("/api/categories/{$category->id}/flashcards/{$flashcardId}", [
@@ -97,6 +103,8 @@ class FlashcardManagementTest extends TestCase
 
     public function test_user_can_upload_flashcard_media_files(): void
     {
+        Storage::fake('public');
+
         $user = User::factory()->create();
         $category = FlashcardCategory::query()->create(['name' => 'Media']);
 
@@ -122,8 +130,83 @@ class FlashcardManagementTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('flashcard.type', 'other');
 
-        $this->assertStringStartsWith('/uploads/flashcards/images/', $response->json('flashcard.sides.0.images.0'));
-        $this->assertStringStartsWith('/uploads/flashcards/audios/', $response->json('flashcard.sides.0.audios.0'));
+        $this->assertStringContainsString('/storage/flashcards/images/', $response->json('flashcard.sides.0.images.0'));
+        $this->assertStringContainsString('/storage/flashcards/audios/', $response->json('flashcard.sides.0.audios.0'));
+        $this->assertStringStartsWith('flashcards/images/', $response->json('flashcard.sides.0.raw_images.0'));
+        $this->assertStringStartsWith('flashcards/audios/', $response->json('flashcard.sides.0.raw_audios.0'));
+        $this->assertStringStartsWith('flashcards/images/', Flashcard::query()->firstOrFail()->sides()->firstOrFail()->images[0]);
+        $this->assertStringStartsWith('flashcards/audios/', Flashcard::query()->firstOrFail()->sides()->firstOrFail()->audios[0]);
+    }
+
+    public function test_user_can_smart_process_english_flashcard(): void
+    {
+        config(['services.openai.key' => 'test-key']);
+        Storage::fake('public');
+        Http::fake(function ($request) {
+            if (str_ends_with($request->url(), '/responses')) {
+                return Http::response([
+                    'output' => [[
+                        'content' => [[
+                            'type' => 'output_text',
+                            'text' => json_encode([
+                                'english_word' => 'Apple',
+                                'persian_meaning' => 'سیب',
+                                'tts_text' => 'Apple',
+                                'image_prompt' => 'Simple educational anime image of an apple, no text.',
+                                'side_1_content' => 'سیب',
+                                'side_2_content' => "Apple (noun)\nAP-uhl\n\nUseful near words: fruit, snack, produce\n\nNone\n\nI ate an apple after lunch.\n\nNoun: countable noun.",
+                            ], JSON_UNESCAPED_UNICODE),
+                        ]],
+                    ]],
+                    'usage' => [
+                        'input_tokens' => 10,
+                        'output_tokens' => 20,
+                    ],
+                ]);
+            }
+
+            if (str_ends_with($request->url(), '/audio/speech')) {
+                return Http::response('fake-mp3', 200, ['Content-Type' => 'audio/mpeg']);
+            }
+
+            if (str_ends_with($request->url(), '/images/generations')) {
+                return Http::response([
+                    'data' => [[
+                        'b64_json' => base64_encode('fake-png'),
+                    ]],
+                    'usage' => ['total_tokens' => 3],
+                ]);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $user = User::factory()->create();
+        $category = FlashcardCategory::query()->create(['name' => 'Smart']);
+
+        CategoryAccess::query()->create([
+            'user_id' => $user->id,
+            'flashcard_category_id' => $category->id,
+            'can_edit' => true,
+            'steps' => CategoryAccess::DEFAULT_STEPS,
+        ]);
+
+        $flashcard = Flashcard::query()->create([
+            'flashcard_category_id' => $category->id,
+            'title' => 'سیب',
+            'type' => 'english-active',
+        ]);
+        $flashcard->sides()->create(['side_number' => 1, 'content' => 'سیب']);
+
+        $this->actingAs($user)
+            ->postJson("/api/categories/{$category->id}/flashcards/{$flashcard->id}/smart-process")
+            ->assertOk()
+            ->assertJsonPath('flashcard.sides.0.content', 'سیب')
+            ->assertJsonPath('flashcard.sides.1.content', "Apple (noun)\nAP-uhl\n\nUseful near words: fruit, snack, produce\n\nNone\n\nI ate an apple after lunch.\n\nNoun: countable noun.");
+
+        $this->assertCount(2, $flashcard->refresh()->sides);
+        $this->assertStringStartsWith('flashcards/ai/images/', $flashcard->sides()->where('side_number', 2)->first()->images[0]);
+        $this->assertStringStartsWith('flashcards/ai/audios/', $flashcard->sides()->where('side_number', 2)->first()->audios[0]);
     }
 
     public function test_user_with_edit_access_can_delete_empty_leaf_category(): void
