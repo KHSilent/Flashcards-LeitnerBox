@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->group(function () {
     Route::get('/csrf-token', [AuthController::class, 'csrfToken']);
-    Route::post('/login', [AuthController::class, 'login'])->middleware(['guest','throttle:5,1']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware(['guest', 'throttle:5,1']);
 
     Route::middleware('auth')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
@@ -26,6 +26,8 @@ Route::prefix('api')->group(function () {
         Route::put('/categories/{category}/steps', [CategoryController::class, 'updateSteps']);
         Route::get('/categories/{category}/flashcards', [FlashcardController::class, 'index']);
         Route::post('/categories/{category}/flashcards', [FlashcardController::class, 'store']);
+        Route::post('/categories/{category}/flashcards/bulk-smart', [FlashcardController::class, 'bulkSmart']);
+        Route::post('/categories/{category}/flashcards/bulk-normal', [FlashcardController::class, 'bulkNormal']);
         Route::post('/categories/{category}/flashcards/{flashcard}/smart-process', [FlashcardController::class, 'smartProcess']);
         Route::post('/categories/{category}/flashcards/{flashcard}', [FlashcardController::class, 'update']);
         Route::put('/categories/{category}/flashcards/{flashcard}', [FlashcardController::class, 'update']);

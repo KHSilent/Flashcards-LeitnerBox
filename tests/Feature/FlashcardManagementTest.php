@@ -8,6 +8,7 @@ use App\Models\FlashcardCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -200,13 +201,112 @@ class FlashcardManagementTest extends TestCase
 
         $this->actingAs($user)
             ->postJson("/api/categories/{$category->id}/flashcards/{$flashcard->id}/smart-process")
+            ->assertAccepted()
+            ->assertJsonPath('flashcard.needs_ai_processing', true)
+            ->assertJsonPath('flashcard.ai_processing_status', Flashcard::AI_STATUS_PENDING);
+
+        $this->assertSame(0, Artisan::call('flashcards:process-smart', ['--limit' => 1]));
+
+        $this->actingAs($user)
+            ->getJson("/api/categories/{$category->id}/flashcards")
             ->assertOk()
-            ->assertJsonPath('flashcard.sides.0.content', 'سیب')
-            ->assertJsonPath('flashcard.sides.1.content', "Apple (noun)\nAP-uhl\n\nUseful near words: fruit, snack, produce\n\nNone\n\nI ate an apple after lunch.\n\nNoun: countable noun.");
+            ->assertJsonPath('flashcards.0.needs_ai_processing', false)
+            ->assertJsonPath('flashcards.0.ai_processing_status', Flashcard::AI_STATUS_DONE)
+            ->assertJsonPath('flashcards.0.sides.0.content', 'سیب')
+            ->assertJsonPath('flashcards.0.sides.1.content', "Apple (noun)\nAP-uhl\n\nUseful near words: fruit, snack, produce\n\nNone\n\nI ate an apple after lunch.\n\nNoun: countable noun.");
 
         $this->assertCount(2, $flashcard->refresh()->sides);
         $this->assertStringStartsWith('flashcards/ai/images/', $flashcard->sides()->where('side_number', 2)->first()->images[0]);
         $this->assertStringStartsWith('flashcards/ai/audios/', $flashcard->sides()->where('side_number', 2)->first()->audios[0]);
+    }
+
+    public function test_user_can_create_bulk_normal_flashcards(): void
+    {
+        $user = User::factory()->create();
+        $category = FlashcardCategory::query()->create(['name' => 'Bulk normal']);
+
+        CategoryAccess::query()->create([
+            'user_id' => $user->id,
+            'flashcard_category_id' => $category->id,
+            'can_edit' => true,
+            'steps' => CategoryAccess::DEFAULT_STEPS,
+        ]);
+
+        $this->actingAs($user)
+            ->postJson("/api/categories/{$category->id}/flashcards/bulk-normal", [
+                'type' => 'other',
+                'sides' => [
+                    ['side_number' => 1, 'content' => "Front A\nFront B"],
+                    ['side_number' => 2, 'content' => "Back A\nBack B"],
+                    ['side_number' => 3, 'content' => "Hint A\nHint B"],
+                ],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('created', 2)
+            ->assertJsonPath('flashcards.0.sides.0.content', 'Front A')
+            ->assertJsonPath('flashcards.1.sides.2.content', 'Hint B');
+
+        $this->assertSame(2, Flashcard::query()->where('flashcard_category_id', $category->id)->count());
+    }
+
+    public function test_bulk_normal_flashcards_preserve_empty_rows_as_missing_sides(): void
+    {
+        $user = User::factory()->create();
+        $category = FlashcardCategory::query()->create(['name' => 'Bulk normal blanks']);
+
+        CategoryAccess::query()->create([
+            'user_id' => $user->id,
+            'flashcard_category_id' => $category->id,
+            'can_edit' => true,
+            'steps' => CategoryAccess::DEFAULT_STEPS,
+        ]);
+
+        $this->actingAs($user)
+            ->postJson("/api/categories/{$category->id}/flashcards/bulk-normal", [
+                'type' => 'other',
+                'sides' => [
+                    ['side_number' => 1, 'content' => "SS\n\nTT"],
+                    ['side_number' => 2, 'content' => "SSS\nRR\nTT"],
+                ],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('created', 3)
+            ->assertJsonPath('flashcards.0.sides.0.content', 'SS')
+            ->assertJsonPath('flashcards.0.sides.1.content', 'SSS')
+            ->assertJsonCount(1, 'flashcards.1.sides')
+            ->assertJsonPath('flashcards.1.sides.0.side_number', 2)
+            ->assertJsonPath('flashcards.1.sides.0.content', 'RR')
+            ->assertJsonPath('flashcards.2.sides.0.content', 'TT')
+            ->assertJsonPath('flashcards.2.sides.1.content', 'TT');
+    }
+
+    public function test_user_can_queue_bulk_smart_flashcards(): void
+    {
+        $user = User::factory()->create();
+        $category = FlashcardCategory::query()->create(['name' => 'Bulk smart']);
+
+        CategoryAccess::query()->create([
+            'user_id' => $user->id,
+            'flashcard_category_id' => $category->id,
+            'can_edit' => true,
+            'steps' => CategoryAccess::DEFAULT_STEPS,
+        ]);
+
+        $this->actingAs($user)
+            ->postJson("/api/categories/{$category->id}/flashcards/bulk-smart", [
+                'type' => 'english-passive',
+                'items' => "apple\nbook",
+            ])
+            ->assertCreated()
+            ->assertJsonPath('created', 2)
+            ->assertJsonPath('flashcards.0.needs_ai_processing', true)
+            ->assertJsonPath('flashcards.0.ai_processing_status', Flashcard::AI_STATUS_PENDING)
+            ->assertJsonPath('flashcards.1.sides.0.content', 'book');
+
+        $this->assertSame(2, Flashcard::query()
+            ->where('flashcard_category_id', $category->id)
+            ->where('needs_ai_processing', true)
+            ->count());
     }
 
     public function test_user_with_edit_access_can_delete_empty_leaf_category(): void

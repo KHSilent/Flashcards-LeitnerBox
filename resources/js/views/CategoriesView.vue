@@ -123,7 +123,6 @@ onMounted(fetchCategories);
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-bold">دسته‌ها</h1>
-                <p class="mt-1 text-sm text-slate-500 dark:text-neutral-400">دسته‌ها به شکل پوشه‌ای نمایش داده می‌شوند.</p>
             </div>
             <div class="flex items-center gap-2">
                 <button

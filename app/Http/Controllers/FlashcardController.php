@@ -5,18 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\CategoryAccess;
 use App\Models\Flashcard;
 use App\Models\FlashcardCategory;
-use App\Services\SmartFlashcardProcessor;
 use App\Support\FlashcardMedia;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class FlashcardController extends Controller
 {
-    public function __construct(private readonly SmartFlashcardProcessor $smartProcessor) {}
-
     public function index(Request $request, FlashcardCategory $category): JsonResponse
     {
         $this->editableAccess($request, $category);
@@ -61,6 +59,122 @@ class FlashcardController extends Controller
         return response()->json(['flashcard' => $this->payload($flashcard)], 201);
     }
 
+    public function bulkSmart(Request $request, FlashcardCategory $category): JsonResponse
+    {
+        $this->editableAccess($request, $category);
+
+        $data = $request->validate([
+            'type' => ['required', Rule::in([Flashcard::TYPE_ENGLISH_ACTIVE, Flashcard::TYPE_ENGLISH_PASSIVE])],
+            'items' => ['required', 'string'],
+        ]);
+        $items = $this->lineList($data['items']);
+
+        if ($items === []) {
+            throw ValidationException::withMessages(['items' => 'حداقل یک خط وارد کنید.']);
+        }
+
+        $flashcards = DB::transaction(function () use ($category, $data, $items) {
+            return collect($items)->map(function (string $item) use ($category, $data) {
+                $flashcard = Flashcard::query()->create([
+                    'flashcard_category_id' => $category->id,
+                    'title' => $item,
+                    'type' => $data['type'],
+                    'needs_ai_processing' => true,
+                    'ai_processing_status' => Flashcard::AI_STATUS_PENDING,
+                    'ai_processing_requested_at' => now(),
+                ]);
+
+                $flashcard->sides()->create([
+                    'side_number' => 1,
+                    'content' => $item,
+                    'images' => [],
+                    'audios' => [],
+                ]);
+
+                return $flashcard->load('sides');
+            });
+        });
+
+        return response()->json([
+            'created' => $flashcards->count(),
+            'flashcards' => $flashcards->map(fn (Flashcard $flashcard) => $this->payload($flashcard))->values(),
+        ], 201);
+    }
+
+    public function bulkNormal(Request $request, FlashcardCategory $category): JsonResponse
+    {
+        $this->editableAccess($request, $category);
+
+        $data = $request->validate([
+            'type' => ['required', Rule::in(Flashcard::TYPES)],
+            'sides' => ['required', 'array', 'min:2', 'max:12'],
+            'sides.*.side_number' => ['required', 'integer', 'min:1', 'distinct'],
+            'sides.*.content' => ['nullable', 'string'],
+        ]);
+
+        $sideLines = collect($data['sides'])->map(fn (array $side) => [
+            'side_number' => (int) $side['side_number'],
+            'lines' => $this->lineRows($side['content'] ?? ''),
+        ])->values();
+
+        $cardCount = $sideLines->pluck('lines')->map(fn (array $lines) => count($lines))->max() ?: 0;
+
+        if ($cardCount < 1) {
+            throw ValidationException::withMessages([
+                'sides' => 'حداقل یک خط برای ساخت کارت وارد کنید.',
+            ]);
+        }
+
+        $sideLines = $sideLines->map(fn (array $side) => [
+            'side_number' => $side['side_number'],
+            'lines' => array_pad($side['lines'], $cardCount, ''),
+        ]);
+        $cardIndexes = collect(range(0, $cardCount - 1))
+            ->filter(fn (int $index) => $sideLines->contains(fn (array $side) => trim($side['lines'][$index]) !== ''))
+            ->values();
+
+        if ($cardIndexes->isEmpty()) {
+            throw ValidationException::withMessages([
+                'sides' => 'حداقل یک کارت با متن وارد کنید.',
+            ]);
+        }
+
+        $flashcards = DB::transaction(function () use ($category, $data, $sideLines, $cardIndexes) {
+            return $cardIndexes->map(function (int $index) use ($category, $data, $sideLines) {
+                $firstLine = $sideLines
+                    ->map(fn (array $side) => trim($side['lines'][$index]))
+                    ->first(fn (string $line) => $line !== '');
+                $flashcard = Flashcard::query()->create([
+                    'flashcard_category_id' => $category->id,
+                    'title' => $firstLine,
+                    'type' => $data['type'],
+                ]);
+
+                foreach ($sideLines as $side) {
+                    $content = trim($side['lines'][$index]);
+
+                    if ($content === '') {
+                        continue;
+                    }
+
+                    $flashcard->sides()->create([
+                        'side_number' => $side['side_number'],
+                        'content' => $content,
+                        'images' => [],
+                        'audios' => [],
+                    ]);
+                }
+
+                return $flashcard->load('sides');
+            });
+        });
+
+        return response()->json([
+            'created' => $flashcards->count(),
+            'flashcards' => $flashcards->map(fn (Flashcard $flashcard) => $this->payload($flashcard))->values(),
+        ], 201);
+    }
+
     public function update(Request $request, FlashcardCategory $category, Flashcard $flashcard): JsonResponse
     {
         $this->editableAccess($request, $category);
@@ -96,9 +210,22 @@ class FlashcardController extends Controller
         $this->editableAccess($request, $category);
         $this->guardFlashcardBelongsToCategory($category, $flashcard);
 
-        $flashcard = $this->smartProcessor->process($flashcard);
+        if (! $flashcard->supportsAiProcessing()) {
+            throw ValidationException::withMessages([
+                'type' => 'پردازش هوشمند فقط برای کارت‌های انگلیسی فعال و انگلیسی پسیو فعال است.',
+            ]);
+        }
 
-        return response()->json(['flashcard' => $this->payload($flashcard)]);
+        $flashcard->forceFill([
+            'needs_ai_processing' => true,
+            'ai_processing_status' => Flashcard::AI_STATUS_PENDING,
+            'ai_processing_requested_at' => now(),
+            'ai_processed_at' => null,
+            'ai_processing_failed_at' => null,
+            'ai_processing_error' => null,
+        ])->save();
+
+        return response()->json(['flashcard' => $this->payload($flashcard->refresh()->load('sides'))], 202);
     }
 
     private function editableAccess(Request $request, FlashcardCategory $category): CategoryAccess
@@ -170,12 +297,47 @@ class FlashcardController extends Controller
             ->all();
     }
 
+    /**
+     * @return array<int, string>
+     */
+    private function lineList(string $value): array
+    {
+        return collect(preg_split('/\r\n|\r|\n/', $value) ?: [])
+            ->map(fn ($line) => trim((string) $line))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function lineRows(string $value): array
+    {
+        if (trim($value) === '') {
+            return [];
+        }
+
+        $lines = preg_split('/\r\n|\r|\n/', $value) ?: [];
+
+        return collect($lines)
+            ->map(fn ($line) => trim((string) $line))
+            ->values()
+            ->all();
+    }
+
     private function payload(Flashcard $flashcard): array
     {
         return [
             'id' => $flashcard->id,
             'title' => $flashcard->title,
             'type' => $flashcard->type ?: Flashcard::DEFAULT_TYPE,
+            'needs_ai_processing' => (bool) $flashcard->needs_ai_processing,
+            'ai_processing_status' => $flashcard->ai_processing_status,
+            'ai_processing_error' => $flashcard->ai_processing_error,
+            'ai_processing_requested_at' => $flashcard->ai_processing_requested_at?->toIso8601String(),
+            'ai_processed_at' => $flashcard->ai_processed_at?->toIso8601String(),
+            'ai_processing_failed_at' => $flashcard->ai_processing_failed_at?->toIso8601String(),
             'created_at' => $flashcard->created_at?->toIso8601String(),
             'sides' => $flashcard->sides->map(fn ($side) => [
                 'id' => $side->id,

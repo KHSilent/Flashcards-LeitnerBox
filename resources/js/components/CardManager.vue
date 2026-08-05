@@ -22,6 +22,7 @@ const loading = ref(true);
 const saving = ref(false);
 const smartProcessing = ref(false);
 const modalOpen = ref(false);
+const modalTab = ref('single');
 const editingId = ref(null);
 const previewCard = ref(null);
 const error = ref('');
@@ -32,6 +33,12 @@ const typeOptions = [
     { value: 'english-passive', label: 'English Passive' },
     { value: 'other', label: 'Other' },
 ];
+const smartTypeOptions = typeOptions.filter((option) => ['english-active', 'english-passive'].includes(option.value));
+const createTabs = [
+    { value: 'single', label: 'تکی' },
+    { value: 'smart', label: 'چنتایی هوشمند' },
+    { value: 'normal', label: 'چنتایی معمولی' },
+];
 const pagination = reactive({
     current_page: 1,
     last_page: 1,
@@ -40,14 +47,34 @@ const pagination = reactive({
     from: null,
     to: null,
 });
+const pageInput = ref(1);
 const form = reactive({
     title: '',
+    type: 'other',
+    sides: [],
+});
+const bulkSmartForm = reactive({
+    type: 'english-active',
+    items: '',
+});
+const bulkNormalForm = reactive({
     type: 'other',
     sides: [],
 });
 
 const editingCard = computed(() => flashcards.value.find((card) => card.id === editingId.value));
 const canSmartProcessPreview = computed(() => ['english-active', 'english-passive'].includes(previewCard.value?.type));
+const modalSubmitLabel = computed(() => {
+    if (editingId.value) {
+        return 'ذخیره';
+    }
+
+    return modalTab.value === 'smart' || modalTab.value === 'normal' ? 'افزودن کارت‌ها' : 'ذخیره';
+});
+const bulkNormalRows = computed(() => bulkNormalForm.sides.map((side) => splitRows(side.content)));
+const bulkNormalLineCount = computed(() => Math.max(0, ...bulkNormalRows.value.map((rows) => rows.length)));
+const bulkNormalHasCard = computed(() => Array.from({ length: bulkNormalLineCount.value }).some((_, index) => bulkNormalRows.value.some((rows) => (rows[index] || '').trim() !== '')));
+const bulkNormalLineMismatch = computed(() => bulkNormalForm.sides.length < 2 || !bulkNormalHasCard.value);
 
 function firstError(exception, fallback) {
     return exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || fallback;
@@ -81,8 +108,20 @@ function resetForm() {
     form.sides = [blankSide('', 1)];
 }
 
+function resetBulkForms() {
+    bulkSmartForm.type = 'english-active';
+    bulkSmartForm.items = '';
+    bulkNormalForm.type = 'other';
+    bulkNormalForm.sides = [
+        { side_number: 1, content: '' },
+        { side_number: 2, content: '' },
+    ];
+}
+
 function openCreateModal() {
     resetForm();
+    resetBulkForms();
+    modalTab.value = 'single';
     modalOpen.value = true;
 }
 
@@ -104,6 +143,7 @@ function openEditModal(card) {
 function closeModal() {
     modalOpen.value = false;
     resetForm();
+    resetBulkForms();
 }
 
 function openPreview(card) {
@@ -135,6 +175,38 @@ function linesToArray(value) {
 
 function setFiles(side, key, event) {
     side[key] = Array.from(event.target.files || []);
+}
+
+function addBulkNormalSide() {
+    const max = Math.max(0, ...bulkNormalForm.sides.map((side) => Number(side.side_number) || 0));
+    bulkNormalForm.sides.push({ side_number: max + 1, content: '' });
+}
+
+function removeBulkNormalSide(index) {
+    if (bulkNormalForm.sides.length <= 2) {
+        return;
+    }
+
+    bulkNormalForm.sides.splice(index, 1);
+}
+
+function splitLines(value) {
+    return String(value || '')
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function splitRows(value) {
+    const text = String(value || '');
+
+    if (!text.trim()) {
+        return [];
+    }
+
+    return text
+        .split(/\r?\n/)
+        .map((item) => item.trim());
 }
 
 function payload(method = null) {
@@ -182,11 +254,26 @@ async function fetchCards(page = pagination.current_page) {
 
         flashcards.value = data.flashcards;
         Object.assign(pagination, data.meta);
+        pageInput.value = pagination.current_page;
     } catch (exception) {
         error.value = firstError(exception, 'دریافت کارت‌ها انجام نشد.');
     } finally {
         loading.value = false;
     }
+}
+
+function normalizedPage(value) {
+    const page = Number.parseInt(value, 10);
+
+    if (Number.isNaN(page)) {
+        return pagination.current_page;
+    }
+
+    return Math.min(Math.max(page, 1), pagination.last_page || 1);
+}
+
+function goToPage() {
+    fetchCards(normalizedPage(pageInput.value));
 }
 
 async function saveCard() {
@@ -209,6 +296,69 @@ async function saveCard() {
         emit('changed');
     } catch (exception) {
         error.value = firstError(exception, 'ذخیره کارت انجام نشد.');
+    } finally {
+        saving.value = false;
+    }
+}
+
+async function submitModal() {
+    if (editingId.value || modalTab.value === 'single') {
+        await saveCard();
+        return;
+    }
+
+    if (modalTab.value === 'smart') {
+        await saveBulkSmart();
+        return;
+    }
+
+    await saveBulkNormal();
+}
+
+async function saveBulkSmart() {
+    saving.value = true;
+    error.value = '';
+    message.value = '';
+
+    try {
+        const { data } = await window.axios.post(`/api/categories/${props.categoryId}/flashcards/bulk-smart`, {
+            type: bulkSmartForm.type,
+            items: bulkSmartForm.items,
+        });
+
+        message.value = `${data.created} کارت به صف پردازش هوشمند اضافه شد.`;
+        await fetchCards(1);
+        closeModal();
+        emit('changed');
+    } catch (exception) {
+        error.value = firstError(exception, 'افزودن کارت‌های هوشمند انجام نشد.');
+    } finally {
+        saving.value = false;
+    }
+}
+
+async function saveBulkNormal() {
+    if (bulkNormalLineMismatch.value) {
+        error.value = 'حداقل یک کارت با متن وارد کنید.';
+        return;
+    }
+
+    saving.value = true;
+    error.value = '';
+    message.value = '';
+
+    try {
+        const { data } = await window.axios.post(`/api/categories/${props.categoryId}/flashcards/bulk-normal`, {
+            type: bulkNormalForm.type,
+            sides: bulkNormalForm.sides,
+        });
+
+        message.value = `${data.created} کارت اضافه شد.`;
+        await fetchCards(1);
+        closeModal();
+        emit('changed');
+    } catch (exception) {
+        error.value = firstError(exception, 'افزودن چندتایی کارت‌ها انجام نشد.');
     } finally {
         saving.value = false;
     }
@@ -252,13 +402,33 @@ async function smartProcess(card) {
         }
 
         previewCard.value = data.flashcard;
-        message.value = 'پردازش هوشمند انجام شد.';
+        message.value = 'کارت به صف پردازش هوشمند اضافه شد.';
         emit('changed');
     } catch (exception) {
         error.value = firstError(exception, 'پردازش هوشمند انجام نشد.');
     } finally {
         smartProcessing.value = false;
     }
+}
+
+function isAiQueued(card) {
+    return card?.needs_ai_processing || ['pending', 'processing'].includes(card?.ai_processing_status);
+}
+
+function aiStatusLabel(card) {
+    if (card?.ai_processing_status === 'processing') {
+        return 'درحال پردازش هوشمند';
+    }
+
+    if (card?.ai_processing_status === 'pending' || card?.needs_ai_processing) {
+        return 'در صف پردازش هوشمند';
+    }
+
+    if (card?.ai_processing_status === 'failed') {
+        return 'پردازش ناموفق';
+    }
+
+    return '';
 }
 
 onMounted(() => fetchCards(1));
@@ -271,16 +441,16 @@ onMounted(() => fetchCards(1));
                 <QueueListIcon class="h-5 w-5 text-primary-600" />
                 <div>
                     <h2 class="font-bold">مدیریت کارت‌ها</h2>
-                    <p class="mt-0.5 text-xs text-slate-500 dark:text-neutral-400">کارت‌ها مستقل از گام مطالعه قابل ویرایش هستند.</p>
                 </div>
             </div>
             <button
-                class="inline-flex h-10 items-center gap-2 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700"
+                class="grid h-10 w-10 place-items-center rounded-md border border-primary-200 text-primary-700 hover:border-primary-400 hover:bg-primary-50 dark:border-neutral-700 dark:text-primary-300 dark:hover:bg-neutral-900"
                 type="button"
+                aria-label="افزودن کارت"
+                title="افزودن کارت"
                 @click="openCreateModal"
             >
                 <PlusIcon class="h-5 w-5" />
-                افزودن کارت
             </button>
         </header>
 
@@ -308,6 +478,13 @@ onMounted(() => fetchCards(1));
                             </span>
                             <span class="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-neutral-900 dark:text-neutral-300">
                                 {{ card.sides.length }} رو
+                            </span>
+                            <span
+                                v-if="aiStatusLabel(card)"
+                                class="rounded-md px-2 py-1 text-xs font-semibold"
+                                :class="card.ai_processing_status === 'failed' ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200'"
+                            >
+                                {{ aiStatusLabel(card) }}
                             </span>
                         </div>
                         <p class="line-clamp-2 whitespace-pre-line text-sm leading-7 text-slate-600 dark:text-neutral-300">
@@ -354,7 +531,7 @@ onMounted(() => fetchCards(1));
             <p class="text-slate-500 dark:text-neutral-400">
                 نمایش {{ pagination.from }} تا {{ pagination.to }} از {{ pagination.total }}
             </p>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
                 <button
                     class="h-9 rounded-md border border-slate-200 px-3 font-semibold disabled:opacity-40 dark:border-neutral-700"
                     type="button"
@@ -366,6 +543,26 @@ onMounted(() => fetchCards(1));
                 <span class="min-w-20 text-center text-slate-600 dark:text-neutral-300">
                     {{ pagination.current_page }} / {{ pagination.last_page }}
                 </span>
+                <div class="flex items-center gap-2">
+                    <input
+                        v-model.number="pageInput"
+                        class="h-9 w-20 rounded-md border border-slate-200 bg-white px-2 text-center outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black"
+                        dir="ltr"
+                        type="number"
+                        min="1"
+                        :max="pagination.last_page"
+                        :disabled="loading"
+                        @keyup.enter="goToPage"
+                    >
+                    <button
+                        class="h-9 rounded-md border border-slate-200 px-3 font-semibold text-primary-700 disabled:opacity-40 dark:border-neutral-700 dark:text-primary-300"
+                        type="button"
+                        :disabled="loading"
+                        @click="goToPage"
+                    >
+                        برو
+                    </button>
+                </div>
                 <button
                     class="h-9 rounded-md border border-slate-200 px-3 font-semibold disabled:opacity-40 dark:border-neutral-700"
                     type="button"
@@ -378,7 +575,7 @@ onMounted(() => fetchCards(1));
         </footer>
 
         <div v-if="modalOpen" class="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8">
-            <form class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-950" @submit.prevent="saveCard">
+            <form class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-950" @submit.prevent="submitModal">
                 <header class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 dark:border-neutral-800 dark:bg-neutral-950">
                     <div class="flex items-center gap-2">
                         <PlusIcon v-if="!editingId" class="h-5 w-5 text-primary-600" />
@@ -391,104 +588,192 @@ onMounted(() => fetchCards(1));
                 </header>
 
                 <div class="space-y-4 p-5">
-                    <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
-                        <label class="block">
-                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">عنوان</span>
-                            <input v-model="form.title" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
-                        </label>
+                    <div v-if="!editingId" class="grid grid-cols-3 gap-2 rounded-md bg-slate-100 p-1 text-sm dark:bg-neutral-900">
+                        <button
+                            v-for="tab in createTabs"
+                            :key="tab.value"
+                            class="h-10 rounded-md font-semibold"
+                            :class="modalTab === tab.value ? 'bg-white text-primary-700 shadow-sm dark:bg-black dark:text-primary-300' : 'text-slate-500 hover:text-slate-800 dark:text-neutral-400 dark:hover:text-neutral-100'"
+                            type="button"
+                            @click="modalTab = tab.value"
+                        >
+                            {{ tab.label }}
+                        </button>
+                    </div>
+
+                    <template v-if="editingId || modalTab === 'single'">
+                        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
+                            <label class="block">
+                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">عنوان</span>
+                                <input v-model="form.title" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
+                            </label>
+                            <label class="block">
+                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">نوع</span>
+                                <select v-model="form.type" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
+                                    <option v-for="option in typeOptions" :key="option.value" :value="option.value">
+                                        {{ option.label }}
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <section
+                            v-for="(side, index) in form.sides"
+                            :key="index"
+                            class="rounded-lg border border-slate-200 p-4 dark:border-neutral-800"
+                        >
+                            <div class="mb-3 flex items-center justify-between gap-3">
+                                <div class="flex items-center gap-3">
+                                    <h3 class="font-bold">روی</h3>
+                                    <input
+                                        v-model.number="side.side_number"
+                                        class="h-9 w-20 rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black"
+                                        dir="ltr"
+                                        type="number"
+                                        min="1"
+                                        required
+                                    >
+                                </div>
+                                <button
+                                    class="h-9 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-600 disabled:opacity-40 dark:border-rose-900 dark:text-rose-300"
+                                    type="button"
+                                    :disabled="form.sides.length <= 1"
+                                    @click="removeSide(index)"
+                                >
+                                    حذف رو
+                                </button>
+                            </div>
+
+                            <label class="mb-3 block">
+                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">متن</span>
+                                <textarea v-model="side.content" class="min-h-28 w-full rounded-md border border-slate-200 bg-white px-3 py-2 leading-7 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="auto" required />
+                            </label>
+
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <label class="block">
+                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">لینک تصاویر</span>
+                                    <textarea v-model="side.images_text" class="min-h-20 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm leading-6 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" />
+                                </label>
+                                <label class="block">
+                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">لینک ویس‌ها</span>
+                                    <textarea v-model="side.audios_text" class="min-h-20 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm leading-6 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" />
+                                </label>
+                            </div>
+
+                            <div class="mt-3 grid gap-3 md:grid-cols-2">
+                                <label class="block">
+                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">فایل تصویر</span>
+                                    <input
+                                        class="block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-black"
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        @change="setFiles(side, 'image_files', $event)"
+                                    >
+                                </label>
+                                <label class="block">
+                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">فایل ویس</span>
+                                    <input
+                                        class="block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-black"
+                                        type="file"
+                                        accept="audio/*"
+                                        multiple
+                                        @change="setFiles(side, 'audio_files', $event)"
+                                    >
+                                </label>
+                            </div>
+                        </section>
+
+                        <button
+                            class="inline-flex h-10 items-center gap-2 rounded-md border border-dashed border-primary-300 px-3 text-sm font-semibold text-primary-700 hover:bg-primary-50 dark:border-neutral-700 dark:text-primary-300 dark:hover:bg-neutral-900"
+                            type="button"
+                            @click="addSide"
+                        >
+                            <PlusIcon class="h-5 w-5" />
+                            افزودن رو
+                        </button>
+                    </template>
+
+                    <template v-else-if="modalTab === 'smart'">
                         <label class="block">
                             <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">نوع</span>
-                            <select v-model="form.type" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
+                            <select v-model="bulkSmartForm.type" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
+                                <option v-for="option in smartTypeOptions" :key="option.value" :value="option.value">
+                                    {{ option.label }}
+                                </option>
+                            </select>
+                        </label>
+                        <label class="block">
+                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">هر خط یک کلمه</span>
+                            <textarea v-model="bulkSmartForm.items" class="min-h-72 w-full rounded-md border border-slate-200 bg-white px-3 py-2 leading-7 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="auto" required />
+                            <span class="mt-1 block text-xs text-slate-500 dark:text-neutral-400">{{ splitLines(bulkSmartForm.items).length }} کلمه</span>
+                        </label>
+                    </template>
+
+                    <template v-else>
+                        <label class="block">
+                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">نوع</span>
+                            <select v-model="bulkNormalForm.type" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
                                 <option v-for="option in typeOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
                                 </option>
                             </select>
                         </label>
-                    </div>
 
-                    <section
-                        v-for="(side, index) in form.sides"
-                        :key="index"
-                        class="rounded-lg border border-slate-200 p-4 dark:border-neutral-800"
-                    >
-                        <div class="mb-3 flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-3">
-                                <h3 class="font-bold">روی</h3>
-                                <input
-                                    v-model.number="side.side_number"
-                                    class="h-9 w-20 rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black"
-                                    dir="ltr"
-                                    type="number"
-                                    min="1"
-                                    required
+                        <section
+                            v-for="(side, index) in bulkNormalForm.sides"
+                            :key="index"
+                            class="rounded-lg border border-slate-200 p-4 dark:border-neutral-800"
+                        >
+                            <div class="mb-3 flex items-center justify-between gap-3">
+                                <div class="flex items-center gap-3">
+                                    <h3 class="font-bold">روی</h3>
+                                    <input
+                                        v-model.number="side.side_number"
+                                        class="h-9 w-20 rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black"
+                                        dir="ltr"
+                                        type="number"
+                                        min="1"
+                                        required
+                                    >
+                                </div>
+                                <button
+                                    class="h-9 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-600 disabled:opacity-40 dark:border-rose-900 dark:text-rose-300"
+                                    type="button"
+                                    :disabled="bulkNormalForm.sides.length <= 2"
+                                    @click="removeBulkNormalSide(index)"
                                 >
+                                    حذف رو
+                                </button>
                             </div>
-                            <button
-                                class="h-9 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-600 disabled:opacity-40 dark:border-rose-900 dark:text-rose-300"
-                                type="button"
-                                :disabled="form.sides.length <= 1"
-                                @click="removeSide(index)"
-                            >
-                                حذف رو
-                            </button>
-                        </div>
+                            <textarea v-model="side.content" class="min-h-40 w-full rounded-md border border-slate-200 bg-white px-3 py-2 leading-7 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="auto" required />
+                            <span class="mt-1 block text-xs text-slate-500 dark:text-neutral-400">{{ splitRows(side.content).length }} ردیف</span>
+                        </section>
 
-                        <label class="mb-3 block">
-                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">متن</span>
-                            <textarea v-model="side.content" class="min-h-28 w-full rounded-md border border-slate-200 bg-white px-3 py-2 leading-7 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="auto" required />
-                        </label>
+                        <p v-if="bulkNormalLineMismatch" class="rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                            حداقل یک کارت با متن وارد کنید.
+                        </p>
+                        <p v-else class="text-xs text-slate-500 dark:text-neutral-400">
+                            {{ bulkNormalLineCount }} کارت ساخته می‌شود.
+                        </p>
 
-                        <div class="grid gap-3 md:grid-cols-2">
-                            <label class="block">
-                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">لینک تصاویر</span>
-                                <textarea v-model="side.images_text" class="min-h-20 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm leading-6 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" />
-                            </label>
-                            <label class="block">
-                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">لینک ویس‌ها</span>
-                                <textarea v-model="side.audios_text" class="min-h-20 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm leading-6 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" />
-                            </label>
-                        </div>
-
-                        <div class="mt-3 grid gap-3 md:grid-cols-2">
-                            <label class="block">
-                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">فایل تصویر</span>
-                                <input
-                                    class="block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-black"
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    @change="setFiles(side, 'image_files', $event)"
-                                >
-                            </label>
-                            <label class="block">
-                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">فایل ویس</span>
-                                <input
-                                    class="block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-black"
-                                    type="file"
-                                    accept="audio/*"
-                                    multiple
-                                    @change="setFiles(side, 'audio_files', $event)"
-                                >
-                            </label>
-                        </div>
-                    </section>
-
-                    <button
-                        class="inline-flex h-10 items-center gap-2 rounded-md border border-dashed border-primary-300 px-3 text-sm font-semibold text-primary-700 hover:bg-primary-50 dark:border-neutral-700 dark:text-primary-300 dark:hover:bg-neutral-900"
-                        type="button"
-                        @click="addSide"
-                    >
-                        <PlusIcon class="h-5 w-5" />
-                        افزودن رو
-                    </button>
+                        <button
+                            class="inline-flex h-10 items-center gap-2 rounded-md border border-dashed border-primary-300 px-3 text-sm font-semibold text-primary-700 hover:bg-primary-50 dark:border-neutral-700 dark:text-primary-300 dark:hover:bg-neutral-900"
+                            type="button"
+                            @click="addBulkNormalSide"
+                        >
+                            <PlusIcon class="h-5 w-5" />
+                            افزودن رو
+                        </button>
+                    </template>
                 </div>
 
                 <footer class="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4 dark:border-neutral-800 dark:bg-neutral-950">
                     <button class="h-10 rounded-md border border-slate-200 px-4 text-sm font-semibold dark:border-neutral-700" type="button" @click="closeModal">
                         انصراف
                     </button>
-                    <button class="h-10 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50" type="submit" :disabled="saving">
-                        ذخیره
+                    <button class="h-10 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50" type="submit" :disabled="saving || (!editingId && modalTab === 'normal' && bulkNormalLineMismatch)">
+                        {{ modalSubmitLabel }}
                     </button>
                 </footer>
             </form>
@@ -506,6 +791,13 @@ onMounted(() => fetchCards(1));
                             <span class="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-neutral-900 dark:text-neutral-300">
                                 {{ previewCard.sides.length }} رو
                             </span>
+                            <span
+                                v-if="aiStatusLabel(previewCard)"
+                                class="rounded-md px-2 py-1 text-xs font-semibold"
+                                :class="previewCard.ai_processing_status === 'failed' ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200'"
+                            >
+                                {{ aiStatusLabel(previewCard) }}
+                            </span>
                         </div>
                         <p class="text-xs text-slate-500 dark:text-neutral-400">پیش‌نمایش کارت</p>
                     </div>
@@ -514,12 +806,12 @@ onMounted(() => fetchCards(1));
                             v-if="canSmartProcessPreview"
                             class="inline-flex h-9 items-center gap-2 rounded-md bg-primary-600 px-3 text-xs font-bold text-white hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60"
                             type="button"
-                            :disabled="smartProcessing"
+                            :disabled="smartProcessing || isAiQueued(previewCard)"
                             @click="smartProcess(previewCard)"
                         >
                             <ArrowPathIcon v-if="smartProcessing" class="h-4 w-4 animate-spin" />
                             <SparklesIcon v-else class="h-4 w-4" />
-                            پردازش هوشمند
+                            {{ isAiQueued(previewCard) ? 'در صف' : 'پردازش هوشمند' }}
                         </button>
                         <button class="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-neutral-900" type="button" aria-label="بستن" @click="closePreview">
                             <XMarkIcon class="h-5 w-5" />

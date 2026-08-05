@@ -18,6 +18,7 @@ const pagination = reactive({
     from: null,
     to: null,
 });
+const pageInput = ref(1);
 
 const form = reactive({
     name: '',
@@ -63,11 +64,26 @@ async function fetchUsers(page = pagination.current_page) {
         users.value = data.users;
         roles.value = data.roles;
         Object.assign(pagination, data.meta);
+        pageInput.value = pagination.current_page;
     } catch (exception) {
         error.value = firstError(exception, 'دریافت کاربران انجام نشد.');
     } finally {
         loading.value = false;
     }
+}
+
+function normalizedPage(value) {
+    const page = Number.parseInt(value, 10);
+
+    if (Number.isNaN(page)) {
+        return pagination.current_page;
+    }
+
+    return Math.min(Math.max(page, 1), pagination.last_page || 1);
+}
+
+function goToPage() {
+    fetchUsers(normalizedPage(pageInput.value));
 }
 
 async function saveUser() {
@@ -152,7 +168,6 @@ onMounted(() => fetchUsers(1));
         <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-bold">مدیریت کاربران</h1>
-                <p class="mt-1 text-sm text-slate-500 dark:text-neutral-400">فقط کاربران دارای نقش manageUser به این بخش دسترسی دارند.</p>
             </div>
             <button
                 class="inline-flex h-10 items-center gap-2 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700"
@@ -214,7 +229,7 @@ onMounted(() => fetchUsers(1));
                 <p class="text-slate-500 dark:text-neutral-400">
                     نمایش {{ pagination.from }} تا {{ pagination.to }} از {{ pagination.total }}
                 </p>
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                     <button
                         class="h-9 rounded-md border border-slate-200 px-3 font-semibold disabled:opacity-40 dark:border-neutral-700"
                         type="button"
@@ -226,6 +241,26 @@ onMounted(() => fetchUsers(1));
                     <span class="min-w-20 text-center text-slate-600 dark:text-neutral-300">
                         {{ pagination.current_page }} / {{ pagination.last_page }}
                     </span>
+                    <div class="flex items-center gap-2">
+                        <input
+                            v-model.number="pageInput"
+                            class="h-9 w-20 rounded-md border border-slate-200 bg-white px-2 text-center outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black"
+                            dir="ltr"
+                            type="number"
+                            min="1"
+                            :max="pagination.last_page"
+                            :disabled="loading"
+                            @keyup.enter="goToPage"
+                        >
+                        <button
+                            class="h-9 rounded-md border border-slate-200 px-3 font-semibold text-primary-700 disabled:opacity-40 dark:border-neutral-700 dark:text-primary-300"
+                            type="button"
+                            :disabled="loading"
+                            @click="goToPage"
+                        >
+                            برو
+                        </button>
+                    </div>
                     <button
                         class="h-9 rounded-md border border-slate-200 px-3 font-semibold disabled:opacity-40 dark:border-neutral-700"
                         type="button"

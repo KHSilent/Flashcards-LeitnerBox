@@ -285,6 +285,7 @@ Write concise, consistent flashcards. Persian must be used only for the direct m
 Use American English. Keep examples natural and useful.
 For the near-word section, prefer clean B2-useful synonyms, near-synonyms, or close alternatives, such as "large" for "big". Do not list simple inflections or comparatives like "bigger, biggest" there. Put inflections and parts of speech only in the final grammar/forms note.
 For the confusing section, include words that learners may genuinely mix up in spelling, meaning, register, or usage. If there are no meaningful confusing words, write "None".
+For passive-recognition cards, the Persian meaning is mandatory in side_2_content. It must be actual Persian text, not an English definition, and it must appear immediately after the pronunciation line.
 Return only valid JSON matching the schema.
 PROMPT;
     }
@@ -325,7 +326,7 @@ Card requirements:
 - Side 2 content exact structure:
   1. English headword followed by its part of speech in parentheses
   2. American pronunciation written in simple text
-  3. Persian meaning only
+  3. Persian meaning only. This line is REQUIRED and MUST contain the same Persian translation returned in persian_meaning. Do not skip it. Do not write English on this line.
   4. Blank line
   5. Useful near words: B2-useful synonyms, near-synonyms, or close alternatives in English. Do not use simple inflections/comparatives here.
   6. Blank line
@@ -335,7 +336,13 @@ Card requirements:
   10. Blank line
   11. A compact grammar/forms note listing whether it is noun, verb, adjective, adverb, etc., plus common inflections/forms if useful
 - TTS text: the English headword only.
+- persian_meaning: the Persian translation of the headword; this exact meaning must also appear as line 3 of side_2_content.
 - Image prompt: a simple educational anime-style image prompt for the English headword, no text in the image.
+Before returning JSON, verify side_2_content line by line:
+Line 1 = English headword with part of speech.
+Line 2 = American pronunciation.
+Line 3 = Persian meaning from persian_meaning.
+If line 3 is missing or not Persian, rewrite side_2_content before returning.
 PROMPT;
     }
 

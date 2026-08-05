@@ -74,7 +74,6 @@ onMounted(fetchCategory);
                 <div>
                     <p v-if="page.category?.parent_name" class="mb-1 text-sm text-slate-500 dark:text-neutral-400">{{ page.category.parent_name }}</p>
                     <h1 class="text-2xl font-bold">کارت‌های {{ page.category?.name }}</h1>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-neutral-400">افزودن، ویرایش، فایل‌ها و ترتیب روی کارت‌ها در همین صفحه انجام می‌شود.</p>
                 </div>
 
                 <button

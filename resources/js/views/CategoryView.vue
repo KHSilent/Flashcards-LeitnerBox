@@ -105,7 +105,6 @@ onMounted(fetchCategory);
                             <PencilSquareIcon class="h-5 w-5" />
                         </RouterLink>
                     </div>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-neutral-400">فقط کارت‌هایی که موعدشان رسیده باشد وارد مطالعه می‌شوند.</p>
                 </div>
 
                 <button
