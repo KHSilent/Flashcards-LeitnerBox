@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CategoryAccess;
 use App\Models\FlashcardCategory;
+use App\Models\StudyCard;
 use App\Services\LeitnerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,9 +19,28 @@ class CategoryController extends Controller
     {
         $accesses = CategoryAccess::query()
             ->with('category')
+            ->withCount([
+                'studyCards as due_today_count' => fn ($query) => $query->where(
+                    fn ($query) => $query->where('step_index', 0)->orWhere('due_at', '<=', now()),
+                ),
+                'studyCards as introduced_count',
+            ])
+            ->withSum('studyCards as progress_step_sum', 'step_index')
             ->where('user_id', $request->user()->id)
             ->get()
             ->keyBy('flashcard_category_id');
+
+        $stepCountsByAccess = StudyCard::query()
+            ->select(['category_access_id', 'step_index'])
+            ->selectRaw('COUNT(*) as total_count')
+            ->selectRaw(
+                'SUM(CASE WHEN step_index = 0 OR due_at <= ? THEN 1 ELSE 0 END) as due_count',
+                [now()],
+            )
+            ->whereIn('category_access_id', $accesses->pluck('id'))
+            ->groupBy('category_access_id', 'step_index')
+            ->get()
+            ->groupBy('category_access_id');
 
         $canAccessAll = $request->user()->hasRole('accessAllCategories');
 
@@ -34,13 +54,22 @@ class CategoryController extends Controller
 
         $categories = $categoriesQuery
             ->get()
-            ->map(fn (FlashcardCategory $category) => [
-                'id' => $category->id,
-                'parent_id' => $category->parent_id,
-                'name' => $category->name,
-                'flashcards_count' => $category->flashcards_count,
-                'access' => $this->accessPayloadForIndex($accesses->get($category->id), $canAccessAll),
-            ]);
+            ->map(function (FlashcardCategory $category) use ($accesses, $canAccessAll, $stepCountsByAccess) {
+                $access = $accesses->get($category->id);
+
+                return [
+                    'id' => $category->id,
+                    'parent_id' => $category->parent_id,
+                    'name' => $category->name,
+                    'flashcards_count' => $category->flashcards_count,
+                    'access' => $this->accessPayloadForIndex(
+                        $access,
+                        $canAccessAll,
+                        $category->flashcards_count,
+                        $stepCountsByAccess->get($access?->id, collect())->all(),
+                    ),
+                ];
+            });
 
         return response()->json(['categories' => $categories]);
     }
@@ -90,6 +119,10 @@ class CategoryController extends Controller
                 'access' => [
                     'can_edit' => true,
                     'steps' => CategoryAccess::DEFAULT_STEPS,
+                    'progress_percent' => 0,
+                    'due_today_count' => 0,
+                    'unintroduced_count' => 0,
+                    'step_summary' => $this->stepSummary(CategoryAccess::DEFAULT_STEPS),
                 ],
             ],
         ], 201);
@@ -193,12 +226,26 @@ class CategoryController extends Controller
         );
     }
 
-    private function accessPayloadForIndex(?CategoryAccess $access, bool $canAccessAll): ?array
-    {
+    private function accessPayloadForIndex(
+        ?CategoryAccess $access,
+        bool $canAccessAll,
+        int $flashcardsCount,
+        array $stepCounts = [],
+    ): ?array {
         if ($access) {
+            $steps = $this->leitner->steps($access);
+            $maximumProgress = $flashcardsCount * count($steps);
+            $progress = $maximumProgress > 0
+                ? (int) round(min(1, (int) $access->progress_step_sum / $maximumProgress) * 100)
+                : 0;
+
             return [
                 'can_edit' => $access->can_edit,
-                'steps' => $this->leitner->steps($access),
+                'steps' => $steps,
+                'progress_percent' => $progress,
+                'due_today_count' => (int) $access->due_today_count,
+                'unintroduced_count' => max(0, $flashcardsCount - (int) $access->introduced_count),
+                'step_summary' => $this->stepSummary($steps, $stepCounts),
             ];
         }
 
@@ -209,6 +256,27 @@ class CategoryController extends Controller
         return [
             'can_edit' => false,
             'steps' => CategoryAccess::DEFAULT_STEPS,
+            'progress_percent' => 0,
+            'due_today_count' => 0,
+            'unintroduced_count' => $flashcardsCount,
+            'step_summary' => $this->stepSummary(CategoryAccess::DEFAULT_STEPS),
         ];
+    }
+
+    private function stepSummary(array $steps, array $stepCounts = []): array
+    {
+        $countsByStep = collect($stepCounts)->keyBy(fn (StudyCard $count) => (int) $count->step_index);
+
+        return collect(range(0, count($steps)))
+            ->map(function (int $index) use ($countsByStep) {
+                $count = $countsByStep->get($index);
+
+                return [
+                    'index' => $index,
+                    'total_count' => (int) ($count?->total_count ?? 0),
+                    'due_count' => (int) ($count?->due_count ?? 0),
+                ];
+            })
+            ->all();
     }
 }

@@ -5,9 +5,11 @@ namespace Tests\Feature;
 use App\Models\CategoryAccess;
 use App\Models\Flashcard;
 use App\Models\FlashcardCategory;
+use App\Models\StudyCard;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -379,6 +381,54 @@ class FlashcardManagementTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'categories')
             ->assertJsonPath('categories.0.name', 'Parent Visible');
+    }
+
+    public function test_category_index_includes_user_progress_and_cards_due_today(): void
+    {
+        Carbon::setTestNow('2026-08-05 12:00:00');
+
+        $user = User::factory()->create();
+        $category = FlashcardCategory::query()->create(['name' => 'Progress']);
+        $access = CategoryAccess::query()->create([
+            'user_id' => $user->id,
+            'flashcard_category_id' => $category->id,
+            'can_edit' => true,
+            'steps' => [2, 4],
+        ]);
+
+        $cards = collect(range(1, 4))->map(fn (int $index) => Flashcard::query()->create([
+            'flashcard_category_id' => $category->id,
+            'title' => "Card {$index}",
+        ]));
+
+        StudyCard::query()->create([
+            'category_access_id' => $access->id,
+            'flashcard_id' => $cards[0]->id,
+            'step_index' => 1,
+            'entered_at' => now(),
+            'due_at' => now()->subMinute(),
+        ]);
+        StudyCard::query()->create([
+            'category_access_id' => $access->id,
+            'flashcard_id' => $cards[1]->id,
+            'step_index' => 2,
+            'entered_at' => now(),
+            'due_at' => now()->addDay(),
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/categories')
+            ->assertOk()
+            ->assertJsonPath('categories.0.access.progress_percent', 38)
+            ->assertJsonPath('categories.0.access.due_today_count', 1)
+            ->assertJsonPath('categories.0.access.unintroduced_count', 2)
+            ->assertJsonPath('categories.0.access.step_summary.0.total_count', 0)
+            ->assertJsonPath('categories.0.access.step_summary.1.total_count', 1)
+            ->assertJsonPath('categories.0.access.step_summary.1.due_count', 1)
+            ->assertJsonPath('categories.0.access.step_summary.2.total_count', 1)
+            ->assertJsonPath('categories.0.access.step_summary.2.due_count', 0);
+
+        Carbon::setTestNow();
     }
 
     public function test_access_all_categories_role_can_read_categories_without_edit_access(): void

@@ -159,7 +159,7 @@ onMounted(fetchCategories);
             {{ error }}
         </div>
 
-        <div v-else class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
+        <div v-else class="overflow-visible rounded-lg border border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
             <CategoryTreeNode v-for="category in tree" :key="category.id" :category="category" :depth="0" />
         </div>
 
