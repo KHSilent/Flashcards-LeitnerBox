@@ -1,59 +1,141 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# FlashCard
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A bilingual Persian/English Leitner flashcard application built with Laravel 12, Vue 3, Tailwind CSS, and Vite.
 
-## About Laravel
+## Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Persian and English UI with automatic RTL/LTR switching
+- Language preference stored in the browser
+- Nested flashcard categories and per-user access control
+- Configurable Leitner study steps and due-card tracking
+- Multi-sided cards with image and audio uploads
+- Single and bulk card creation
+- Optional OpenAI-assisted English vocabulary cards, images, and pronunciation audio
+- User, role, profile, and category-access management
+- Installable PWA manifest and service worker
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Requirements
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- PHP 8.2 or newer
+- Composer 2
+- Node.js 22
+- pnpm 11
+- SQLite, MySQL, PostgreSQL, or another database supported by Laravel
+- A scheduler process when smart-card processing is enabled
 
-## Learning Laravel
+## Local setup
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+```bash
+git clone <repository-url>
+cd FlashCard
+composer install
+pnpm install --frozen-lockfile
+cp .env.example .env
+php artisan key:generate
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Configure the database in `.env`. For SQLite, create `database/database.sqlite` and set:
 
-## Laravel Sponsors
+```dotenv
+DB_CONNECTION=sqlite
+DB_DATABASE=/absolute/path/to/database/database.sqlite
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Then initialize the application:
 
-### Premium Partners
+```bash
+php artisan migrate
+php artisan storage:link
+pnpm run build
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### Create the first administrator
 
-## Contributing
+There is intentionally no hard-coded default password. Set these values in `.env` before seeding:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```dotenv
+SEED_ADMIN_NAME="Administrator"
+SEED_ADMIN_EMAIL="admin@example.com"
+SEED_ADMIN_PASSWORD="use-a-long-random-password"
+SEED_DEMO_DATA=false
+```
 
-## Code of Conduct
+Then run:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan db:seed
+```
 
-## Security Vulnerabilities
+Set `SEED_DEMO_DATA=true` only if you also want the sample English vocabulary deck.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Development
+
+Run Laravel and Vite separately:
+
+```bash
+php artisan serve
+pnpm run dev
+```
+
+Or use the bundled Composer command, which also starts the scheduler and application log viewer:
+
+```bash
+composer run dev
+```
+
+## Optional OpenAI processing
+
+Add an API key to `.env`:
+
+```dotenv
+OPENAI_API_KEY=
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_TEXT_MODEL=gpt-4.1-mini
+OPENAI_IMAGE_MODEL=gpt-image-1-mini
+OPENAI_TTS_MODEL=gpt-4o-mini-tts
+OPENAI_TTS_VOICE=marin
+```
+
+Queued smart cards are processed by Laravel's scheduler. In production, run the standard scheduler cron entry:
+
+```cron
+* * * * * cd /path/to/FlashCard && php artisan schedule:run >> /dev/null 2>&1
+```
+
+## Tests and checks
+
+```bash
+php artisan test
+vendor/bin/pint --test
+pnpm run build
+pnpm audit --prod
+```
+
+The repository also includes a GitHub Actions workflow that runs formatting checks, backend tests, and the frontend production build.
+
+## Production checklist
+
+1. Point the web server document root to the `public` directory.
+2. Set `APP_ENV=production`, `APP_DEBUG=false`, and the correct HTTPS `APP_URL`.
+3. Use a unique `APP_KEY` and never commit the production `.env` file.
+4. Set `SESSION_SECURE_COOKIE=true` when serving over HTTPS.
+5. Configure a production database, mail/log drivers, backups, and file permissions.
+6. Run `composer install --no-dev --optimize-autoloader` and `pnpm install --frozen-lockfile && pnpm run build`.
+7. Run `php artisan migrate --force`, `php artisan storage:link`, and `php artisan optimize`.
+8. Configure Laravel's scheduler if smart processing is used.
+9. Ensure `storage` and `bootstrap/cache` are writable by the application user.
+
+## Security
+
+- Authentication uses Laravel's session and CSRF protection.
+- Login attempts are rate-limited.
+- API authorization is enforced per user, role, and category.
+- Uploaded SVG files are rejected to avoid stored script execution.
+- Managed uploads are deleted when cards are updated or removed.
+- Basic browser security headers are applied by the application.
+
+Please report security issues privately rather than opening a public issue.
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is licensed under the [MIT License](LICENSE).

@@ -141,6 +141,82 @@ class FlashcardManagementTest extends TestCase
         $this->assertStringStartsWith('flashcards/audios/', Flashcard::query()->firstOrFail()->sides()->firstOrFail()->audios[0]);
     }
 
+    public function test_replaced_and_deleted_uploads_are_removed_from_storage(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+        $category = FlashcardCategory::query()->create(['name' => 'Media cleanup']);
+        CategoryAccess::query()->create([
+            'user_id' => $user->id,
+            'flashcard_category_id' => $category->id,
+            'can_edit' => true,
+            'steps' => CategoryAccess::DEFAULT_STEPS,
+        ]);
+
+        $created = $this->actingAs($user)
+            ->post("/api/categories/{$category->id}/flashcards", [
+                'title' => 'Media card',
+                'sides' => [[
+                    'side_number' => 1,
+                    'content' => 'Front',
+                    'image_files' => [UploadedFile::fake()->image('front.jpg')],
+                ]],
+            ])
+            ->assertCreated();
+
+        $flashcardId = $created->json('flashcard.id');
+        $oldImage = $created->json('flashcard.sides.0.raw_images.0');
+        Storage::disk('public')->assertExists($oldImage);
+
+        $this->actingAs($user)
+            ->putJson("/api/categories/{$category->id}/flashcards/{$flashcardId}", [
+                'title' => 'Without media',
+                'type' => 'other',
+                'sides' => [['side_number' => 1, 'content' => 'Updated']],
+            ])
+            ->assertOk();
+
+        Storage::disk('public')->assertMissing($oldImage);
+
+        $newImage = 'flashcards/images/manual-test.jpg';
+        Storage::disk('public')->put($newImage, 'image');
+        $flashcard = Flashcard::query()->findOrFail($flashcardId);
+        $flashcard->sides()->firstOrFail()->update(['images' => [$newImage]]);
+
+        $this->actingAs($user)
+            ->deleteJson("/api/categories/{$category->id}/flashcards/{$flashcardId}")
+            ->assertOk();
+
+        Storage::disk('public')->assertMissing($newImage);
+    }
+
+    public function test_svg_uploads_are_rejected(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+        $category = FlashcardCategory::query()->create(['name' => 'Safe media']);
+        CategoryAccess::query()->create([
+            'user_id' => $user->id,
+            'flashcard_category_id' => $category->id,
+            'can_edit' => true,
+            'steps' => CategoryAccess::DEFAULT_STEPS,
+        ]);
+
+        $this->actingAs($user)
+            ->post("/api/categories/{$category->id}/flashcards", [
+                'title' => 'Unsafe media',
+                'sides' => [[
+                    'side_number' => 1,
+                    'content' => 'Front',
+                    'image_files' => [UploadedFile::fake()->create('unsafe.svg', 1, 'image/svg+xml')],
+                ]],
+            ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('sides.0.image_files.0');
+    }
+
     public function test_user_can_smart_process_english_flashcard(): void
     {
         config(['services.openai.key' => 'test-key']);

@@ -3,12 +3,15 @@
 namespace App\Services;
 
 use App\Models\Flashcard;
+use App\Support\FlashcardMedia;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class SmartFlashcardProcessor
 {
@@ -31,15 +34,33 @@ class SmartFlashcardProcessor
         $flashcard->load('sides');
 
         $sourceText = $this->sourceText($flashcard);
-        $data = $this->generateCardData($flashcard, $sourceText);
-        $audioUrl = $this->generateSpeech($flashcard, $data['tts_text'] ?: $data['english_word']);
-        $imageUrl = $this->generateImage($flashcard, $data['image_prompt']);
-        $sides = $this->sidesFor($flashcard, $data, $audioUrl, $imageUrl);
+        $oldMedia = $flashcard->sides
+            ->flatMap(fn ($side) => [...($side->images ?: []), ...($side->audios ?: [])])
+            ->values()
+            ->all();
+        $generatedMedia = [];
 
-        $flashcard->sides()->delete();
+        try {
+            $data = $this->generateCardData($flashcard, $sourceText);
+            $audioUrl = $this->generateSpeech($flashcard, $data['tts_text'] ?: $data['english_word']);
+            $generatedMedia[] = $audioUrl;
+            $imageUrl = $this->generateImage($flashcard, $data['image_prompt']);
+            $generatedMedia[] = $imageUrl;
+            $sides = $this->sidesFor($flashcard, $data, $audioUrl, $imageUrl);
 
-        foreach ($sides as $side) {
-            $flashcard->sides()->create($side);
+            DB::transaction(function () use ($flashcard, $sides) {
+                $flashcard->sides()->delete();
+
+                foreach ($sides as $side) {
+                    $flashcard->sides()->create($side);
+                }
+
+            });
+            FlashcardMedia::deleteManaged($oldMedia);
+        } catch (Throwable $exception) {
+            FlashcardMedia::deleteManaged($generatedMedia);
+
+            throw $exception;
         }
 
         return $flashcard->refresh()->load('sides');

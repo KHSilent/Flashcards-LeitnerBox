@@ -10,13 +10,28 @@ use Throwable;
 
 class ProcessSmartFlashcards extends Command
 {
-    protected $signature = 'flashcards:process-smart {--limit=5}';
+    protected $signature = 'flashcards:process-smart {--limit=5} {--stale-after=15}';
 
     protected $description = 'Process queued smart flashcards one by one.';
 
     public function handle(SmartFlashcardProcessor $processor): int
     {
         $limit = max(1, min((int) $this->option('limit'), 25));
+        $staleAfter = max(5, min((int) $this->option('stale-after'), 120));
+
+        $recovered = Flashcard::query()
+            ->where('needs_ai_processing', true)
+            ->where('ai_processing_status', Flashcard::AI_STATUS_PROCESSING)
+            ->where('updated_at', '<=', now()->subMinutes($staleAfter))
+            ->update([
+                'ai_processing_status' => Flashcard::AI_STATUS_PENDING,
+                'ai_processing_error' => 'The previous processing attempt was interrupted and has been queued again.',
+            ]);
+
+        if ($recovered > 0) {
+            $this->warn("Recovered {$recovered} interrupted flashcard(s).");
+        }
+
         $ids = Flashcard::query()
             ->where('needs_ai_processing', true)
             ->where('ai_processing_status', Flashcard::AI_STATUS_PENDING)

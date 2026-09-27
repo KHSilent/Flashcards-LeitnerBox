@@ -105,6 +105,13 @@ return [
         ),
     ],
 
+    'seed_admin' => [
+        'name' => env('SEED_ADMIN_NAME', 'Administrator'),
+        'email' => env('SEED_ADMIN_EMAIL'),
+        'password' => env('SEED_ADMIN_PASSWORD'),
+        'demo_data' => env('SEED_DEMO_DATA', false),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Maintenance Mode Driver

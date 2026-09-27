@@ -12,9 +12,14 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
+use Throwable;
 
 class FlashcardController extends Controller
 {
+    /** @var array<int, string> */
+    private array $storedUploads = [];
+
     public function index(Request $request, FlashcardCategory $category): JsonResponse
     {
         $this->editableAccess($request, $category);
@@ -43,18 +48,25 @@ class FlashcardController extends Controller
     {
         $this->editableAccess($request, $category);
         $data = $this->validated($request);
+        $this->storedUploads = [];
 
-        $flashcard = DB::transaction(function () use ($category, $data) {
-            $flashcard = Flashcard::query()->create([
-                'flashcard_category_id' => $category->id,
-                'title' => $data['title'] ?? null,
-                'type' => $data['type'] ?? Flashcard::DEFAULT_TYPE,
-            ]);
+        try {
+            $flashcard = DB::transaction(function () use ($category, $data) {
+                $flashcard = Flashcard::query()->create([
+                    'flashcard_category_id' => $category->id,
+                    'title' => $data['title'] ?? null,
+                    'type' => $data['type'] ?? Flashcard::DEFAULT_TYPE,
+                ]);
 
-            $this->syncSides($flashcard, $data['sides']);
+                $this->syncSides($flashcard, $data['sides']);
 
-            return $flashcard->load('sides');
-        });
+                return $flashcard->load('sides');
+            });
+        } catch (Throwable $exception) {
+            FlashcardMedia::deleteManaged($this->storedUploads);
+
+            throw $exception;
+        }
 
         return response()->json(['flashcard' => $this->payload($flashcard)], 201);
     }
@@ -65,12 +77,16 @@ class FlashcardController extends Controller
 
         $data = $request->validate([
             'type' => ['required', Rule::in([Flashcard::TYPE_ENGLISH_ACTIVE, Flashcard::TYPE_ENGLISH_PASSIVE])],
-            'items' => ['required', 'string'],
+            'items' => ['required', 'string', 'max:60000'],
         ]);
         $items = $this->lineList($data['items']);
 
         if ($items === []) {
             throw ValidationException::withMessages(['items' => 'Enter at least one line.']);
+        }
+
+        if (count($items) > 500) {
+            throw ValidationException::withMessages(['items' => 'A maximum of 500 cards may be created at once.']);
         }
 
         $flashcards = DB::transaction(function () use ($category, $data, $items) {
@@ -109,7 +125,7 @@ class FlashcardController extends Controller
             'type' => ['required', Rule::in(Flashcard::TYPES)],
             'sides' => ['required', 'array', 'min:2', 'max:12'],
             'sides.*.side_number' => ['required', 'integer', 'min:1', 'distinct'],
-            'sides.*.content' => ['nullable', 'string'],
+            'sides.*.content' => ['nullable', 'string', 'max:60000'],
         ]);
 
         $sideLines = collect($data['sides'])->map(fn (array $side) => [
@@ -122,6 +138,12 @@ class FlashcardController extends Controller
         if ($cardCount < 1) {
             throw ValidationException::withMessages([
                 'sides' => 'Enter at least one line to create cards.',
+            ]);
+        }
+
+        if ($cardCount > 500) {
+            throw ValidationException::withMessages([
+                'sides' => 'A maximum of 500 cards may be created at once.',
             ]);
         }
 
@@ -180,17 +202,30 @@ class FlashcardController extends Controller
         $this->editableAccess($request, $category);
         $this->guardFlashcardBelongsToCategory($category, $flashcard);
         $data = $this->validated($request);
+        $oldMedia = $this->mediaValues($flashcard->loadMissing('sides'));
+        $this->storedUploads = [];
 
-        $flashcard = DB::transaction(function () use ($flashcard, $data) {
-            $flashcard->forceFill([
-                'title' => $data['title'] ?? null,
-                'type' => $data['type'] ?? Flashcard::DEFAULT_TYPE,
-            ])->save();
+        try {
+            [$flashcard, $removedPaths] = DB::transaction(function () use ($flashcard, $data, $oldMedia) {
+                $flashcard->forceFill([
+                    'title' => $data['title'] ?? null,
+                    'type' => $data['type'] ?? Flashcard::DEFAULT_TYPE,
+                ])->save();
 
-            $this->syncSides($flashcard, $data['sides']);
+                $this->syncSides($flashcard, $data['sides']);
 
-            return $flashcard->refresh()->load('sides');
-        });
+                $flashcard = $flashcard->refresh()->load('sides');
+                $newPaths = FlashcardMedia::managedPaths($this->mediaValues($flashcard));
+                $removedPaths = array_values(array_diff(FlashcardMedia::managedPaths($oldMedia), $newPaths));
+
+                return [$flashcard, $removedPaths];
+            });
+        } catch (Throwable $exception) {
+            FlashcardMedia::deleteManaged($this->storedUploads);
+
+            throw $exception;
+        }
+        FlashcardMedia::deleteManaged($removedPaths);
 
         return response()->json(['flashcard' => $this->payload($flashcard)]);
     }
@@ -200,7 +235,10 @@ class FlashcardController extends Controller
         $this->editableAccess($request, $category);
         $this->guardFlashcardBelongsToCategory($category, $flashcard);
 
-        $flashcard->delete();
+        $media = $this->mediaValues($flashcard->loadMissing('sides'));
+
+        DB::transaction(fn () => $flashcard->delete());
+        FlashcardMedia::deleteManaged($media);
 
         return response()->json(['ok' => true]);
     }
@@ -251,15 +289,15 @@ class FlashcardController extends Controller
             'title' => ['nullable', 'string', 'max:255'],
             'type' => ['nullable', Rule::in(Flashcard::TYPES)],
             'sides' => ['required', 'array', 'min:1', 'max:12'],
-            'sides.*.content' => ['required', 'string'],
+            'sides.*.content' => ['required', 'string', 'max:60000'],
             'sides.*.side_number' => ['required', 'integer', 'min:1', 'distinct'],
             'sides.*.images' => ['nullable', 'array'],
             'sides.*.images.*' => ['nullable', 'string', 'max:2048'],
-            'sides.*.image_files' => ['nullable', 'array'],
-            'sides.*.image_files.*' => ['file', 'mimes:jpg,jpeg,png,gif,webp,svg', 'max:10240'],
+            'sides.*.image_files' => ['nullable', 'array', 'max:10'],
+            'sides.*.image_files.*' => ['file', 'mimes:jpg,jpeg,png,gif,webp', 'max:10240'],
             'sides.*.audios' => ['nullable', 'array'],
             'sides.*.audios.*' => ['nullable', 'string', 'max:2048'],
-            'sides.*.audio_files' => ['nullable', 'array'],
+            'sides.*.audio_files' => ['nullable', 'array', 'max:10'],
             'sides.*.audio_files.*' => ['file', 'mimes:mp3,wav,ogg,m4a,aac,webm', 'max:51200'],
         ]);
     }
@@ -285,6 +323,17 @@ class FlashcardController extends Controller
     }
 
     /**
+     * @return array<int, string|null>
+     */
+    private function mediaValues(Flashcard $flashcard): array
+    {
+        return $flashcard->sides
+            ->flatMap(fn ($side) => [...($side->images ?: []), ...($side->audios ?: [])])
+            ->values()
+            ->all();
+    }
+
+    /**
      * @param  array<int, UploadedFile>  $files
      * @return array<int, string>
      */
@@ -292,7 +341,17 @@ class FlashcardController extends Controller
     {
         return collect($files)
             ->filter(fn ($file) => $file instanceof UploadedFile)
-            ->map(fn (UploadedFile $file) => $file->storePublicly("flashcards/{$type}", 'public'))
+            ->map(function (UploadedFile $file) use ($type) {
+                $path = $file->storePublicly("flashcards/{$type}", 'public');
+
+                if (! is_string($path) || $path === '') {
+                    throw new RuntimeException('The uploaded media file could not be stored.');
+                }
+
+                $this->storedUploads[] = $path;
+
+                return $path;
+            })
             ->values()
             ->all();
     }

@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use InvalidArgumentException;
 
 class DatabaseSeeder extends Seeder
 {
@@ -19,19 +20,36 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $email = trim((string) config('app.seed_admin.email'));
+        $password = (string) config('app.seed_admin.password');
+
+        if ($email === '' || $password === '') {
+            $this->command?->warn('Skipping database seeding: set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD first.');
+
+            return;
+        }
+
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($password) < 8) {
+            throw new InvalidArgumentException('SEED_ADMIN_EMAIL must be valid and SEED_ADMIN_PASSWORD must contain at least 8 characters.');
+        }
+
         $user = User::query()->firstOrCreate([
-            'email' => 'test@example.com',
+            'email' => $email,
         ], [
-            'name' => 'Test User',
-            'password' => Hash::make('password'),
+            'name' => (string) config('app.seed_admin.name'),
+            'password' => Hash::make($password),
             'is_active' => true,
-            'roles' => ['manageUser'],
+            'roles' => ['manageUser', 'accessAllCategories'],
         ]);
 
         $user->forceFill([
             'is_active' => true,
-            'roles' => array_values(array_unique([...(array) ($user->roles ?: []), 'manageUser'])),
+            'roles' => array_values(array_unique([...(array) ($user->roles ?: []), 'manageUser', 'accessAllCategories'])),
         ])->save();
+
+        if (! config('app.seed_admin.demo_data')) {
+            return;
+        }
 
         $english = FlashcardCategory::query()->firstOrCreate(['parent_id' => null, 'name' => 'زبان انگلیسی']);
         $lessonOne = FlashcardCategory::query()->firstOrCreate(['parent_id' => $english->id, 'name' => 'Lesson 1']);

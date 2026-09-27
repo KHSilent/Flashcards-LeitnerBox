@@ -80,4 +80,34 @@ class FlashcardMedia
             ->values()
             ->all();
     }
+
+    /**
+     * Return only paths managed by this application. Remote URLs and arbitrary
+     * filesystem-looking values must never be passed to the storage delete API.
+     *
+     * @param  array<int, string|null>  $values
+     * @return array<int, string>
+     */
+    public static function managedPaths(array $values): array
+    {
+        return collect($values)
+            ->filter(fn ($value) => is_string($value) && ! filter_var($value, FILTER_VALIDATE_URL))
+            ->map(fn (string $value) => self::normalize($value))
+            ->filter(fn ($value) => is_string($value) && Str::startsWith($value, 'flashcards/'))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, string|null>  $values
+     */
+    public static function deleteManaged(array $values): void
+    {
+        $paths = self::managedPaths($values);
+
+        if ($paths !== []) {
+            Storage::disk('public')->delete($paths);
+        }
+    }
 }

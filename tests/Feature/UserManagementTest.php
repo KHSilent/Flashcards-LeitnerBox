@@ -90,6 +90,26 @@ class UserManagementTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_last_active_user_manager_cannot_remove_their_own_manager_role(): void
+    {
+        $manager = User::factory()->create([
+            'is_active' => true,
+            'roles' => ['manageUser'],
+        ]);
+
+        $this->actingAs($manager)
+            ->putJson("/api/users/{$manager->id}", [
+                'name' => $manager->name,
+                'email' => $manager->email,
+                'is_active' => true,
+                'roles' => [],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The last active user manager cannot be deactivated or lose the manage-user role.');
+
+        $this->assertTrue($manager->refresh()->hasRole('manageUser'));
+    }
+
     public function test_manager_can_edit_user_category_accesses(): void
     {
         $manager = User::factory()->create([

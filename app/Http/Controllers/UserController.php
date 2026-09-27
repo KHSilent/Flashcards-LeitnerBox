@@ -76,11 +76,15 @@ class UserController extends Controller
             abort(422, 'You cannot deactivate your own account.');
         }
 
+        $roles = $this->normalizeRoles($data['roles'] ?? []);
+        $isActive = $data['is_active'] ?? $user->is_active;
+        $this->guardLastActiveManager($user, $isActive, $roles);
+
         $payload = [
             'name' => $data['name'],
             'email' => $data['email'],
-            'is_active' => $data['is_active'] ?? $user->is_active,
-            'roles' => $this->normalizeRoles($data['roles'] ?? []),
+            'is_active' => $isActive,
+            'roles' => $roles,
         ];
 
         if (! empty($data['password'])) {
@@ -183,6 +187,23 @@ class UserController extends Controller
             ->unique()
             ->values()
             ->all();
+    }
+
+    private function guardLastActiveManager(User $user, bool $willBeActive, array $roles): void
+    {
+        $isActiveManager = $user->is_active && $user->hasRole('manageUser');
+        $willRemainManager = $willBeActive && in_array('manageUser', $roles, true);
+
+        if (! $isActiveManager || $willRemainManager) {
+            return;
+        }
+
+        $activeManagerCount = User::query()
+            ->where('is_active', true)
+            ->whereJsonContains('roles', 'manageUser')
+            ->count();
+
+        abort_if($activeManagerCount <= 1, 422, 'The last active user manager cannot be deactivated or lose the manage-user role.');
     }
 
     private function categoryAccessPayload(User $user): array

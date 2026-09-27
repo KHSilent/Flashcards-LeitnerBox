@@ -7,9 +7,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StudyController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
-Route::get('aa',function (){
-   dd(\Illuminate\Support\Facades\Hash::make('password'));
-});
+
 Route::prefix('api')->group(function () {
     Route::get('/csrf-token', [AuthController::class, 'csrfToken']);
     Route::post('/login', [AuthController::class, 'login'])->middleware(['guest', 'throttle:5,1']);
