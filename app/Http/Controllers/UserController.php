@@ -73,7 +73,7 @@ class UserController extends Controller
         $data = $this->validateUser($request, $user, false);
 
         if ($request->user()->is($user) && array_key_exists('is_active', $data) && ! $data['is_active']) {
-            abort(422, 'نمی‌توانید حساب خودتان را غیرفعال کنید.');
+            abort(422, 'You cannot deactivate your own account.');
         }
 
         $payload = [
@@ -97,7 +97,7 @@ class UserController extends Controller
         $this->authorizeManageUsers($request);
 
         if ($request->user()->is($user)) {
-            abort(422, 'نمی‌توانید حساب خودتان را حذف کنید.');
+            abort(422, 'You cannot delete your own account.');
         }
 
         $user->delete();

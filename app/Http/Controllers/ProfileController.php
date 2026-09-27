@@ -32,7 +32,7 @@ class ProfileController extends Controller
 
         if (! Hash::check($data['current_password'], $request->user()->password)) {
             throw ValidationException::withMessages([
-                'current_password' => 'رمز فعلی درست نیست.',
+                'current_password' => 'The current password is incorrect.',
             ]);
         }
 

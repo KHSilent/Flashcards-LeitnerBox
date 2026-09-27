@@ -11,6 +11,7 @@ import {
     SpeakerWaveIcon,
 } from '@heroicons/vue/24/outline';
 import AutoDirContent from '../components/AutoDirContent.vue';
+import { apiError, locale, t } from '../i18n';
 
 const route = useRoute();
 const loading = ref(true);
@@ -27,7 +28,7 @@ const customStep = ref(0);
 const currentCard = computed(() => cards.value[currentIndex.value] || null);
 const currentSides = computed(() => currentCard.value?.flashcard.sides || []);
 const currentSide = computed(() => currentSides.value[currentSideIndex.value] || null);
-const progressText = computed(() => cards.value.length ? `${currentIndex.value + 1} از ${cards.value.length}` : '0 از 0');
+const progressText = computed(() => t('common.pageProgress', { current: cards.value.length ? currentIndex.value + 1 : 0, total: cards.value.length }));
 const sideProgressText = computed(() => currentSides.value.length ? `${currentSideIndex.value + 1} / ${currentSides.value.length}` : '0 / 0');
 const maxStep = computed(() => steps.value.length);
 const stepNumber = computed(() => Number(route.params.step));
@@ -47,7 +48,7 @@ async function fetchCards() {
         currentIndex.value = 0;
         currentSideIndex.value = 0;
     } catch (exception) {
-        error.value = exception.response?.data?.message || 'کارت‌های این گام دریافت نشدند.';
+        error.value = apiError(exception, 'study.stepCardsFailed');
     } finally {
         loading.value = false;
     }
@@ -55,10 +56,10 @@ async function fetchCards() {
 
 function formatDate(value) {
     if (!value) {
-        return 'بدون موعد';
+        return t('study.noDueDate');
     }
 
-    return new Intl.DateTimeFormat('en-US-u-ca-gregory', {
+    return new Intl.DateTimeFormat(locale.value === 'fa' ? 'fa-IR' : 'en-US', {
         year: 'numeric',
         month: 'long',
         day: '2-digit',
@@ -147,7 +148,7 @@ async function moveToCustomStep() {
         }
         currentSideIndex.value = 0;
     } catch (exception) {
-        error.value = exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || 'تغییر گام انجام نشد.';
+        error.value = apiError(exception, 'study.moveFailed');
     } finally {
         submitting.value = false;
     }
@@ -159,11 +160,11 @@ onMounted(fetchCards);
 <template>
     <section class="mx-auto max-w-4xl px-4 py-8">
         <RouterLink :to="{ name: 'category', params: { id: route.params.id } }" class="mb-4 inline-flex text-sm font-semibold text-primary-700 hover:text-primary-800 dark:text-primary-300">
-            بازگشت به گام‌ها
+            {{ t('study.back') }}
         </RouterLink>
 
         <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-neutral-800 dark:bg-neutral-950">
-            در حال دریافت کارت‌ها...
+            {{ t('study.stepCardsLoading') }}
         </div>
 
         <p v-else-if="error" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
@@ -171,14 +172,14 @@ onMounted(fetchCards);
         </p>
 
         <div v-else-if="!cards.length" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-neutral-800 dark:bg-neutral-950">
-            کارتی در این گام نیست.
+            {{ t('study.emptyStep') }}
         </div>
 
         <article v-else-if="currentCard" class="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
             <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-neutral-800">
                 <div>
-                    <p class="text-sm text-slate-500 dark:text-neutral-400">{{ category?.name }} / گام {{ stepNumber }}</p>
-                    <h1 class="mt-1 text-xl font-bold">{{ currentCard.flashcard.title || 'فلش‌کارت' }}</h1>
+                    <p class="text-sm text-slate-500 dark:text-neutral-400">{{ category?.name }} / {{ t('common.step', { number: stepNumber }) }}</p>
+                    <h1 class="mt-1 text-xl font-bold">{{ currentCard.flashcard.title || t('app.name') }}</h1>
                 </div>
                 <div class="flex items-center gap-2">
                     <span class="inline-flex items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold dark:bg-neutral-900">
@@ -195,21 +196,21 @@ onMounted(fetchCards);
                         <button
                             class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
                             type="button"
-                            aria-label="روی قبلی"
+                            :aria-label="t('study.previousSide')"
                             @click="previousSide"
                         >
                             <ChevronRightIcon class="h-5 w-5" />
                         </button>
 
                         <div class="text-center">
-                            <p class="text-xs font-semibold text-slate-500 dark:text-neutral-400">روی {{ currentSide.side_number }}</p>
+                            <p class="text-xs font-semibold text-slate-500 dark:text-neutral-400">{{ t('common.side', { number: currentSide.side_number }) }}</p>
                             <p class="mt-1 text-xs text-slate-400 dark:text-neutral-500">{{ sideProgressText }}</p>
                         </div>
 
                         <button
                             class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
                             type="button"
-                            aria-label="روی بعدی"
+                            :aria-label="t('study.nextSide')"
                             @click="nextSide"
                         >
                             <ChevronLeftIcon class="h-5 w-5" />
@@ -230,7 +231,7 @@ onMounted(fetchCards);
                             >
                                 <img
                                     :src="image"
-                                    :alt="`روی ${currentSide.side_number}`"
+                                    :alt="t('common.side', { number: currentSide.side_number })"
                                     class="h-48 w-full object-contain transition group-hover:scale-[1.02]"
                                     loading="lazy"
                                 >
@@ -246,14 +247,14 @@ onMounted(fetchCards);
                                 <audio class="w-full" controls :src="audio" preload="none" />
                                 <a :href="audio" target="_blank" rel="noreferrer" class="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-primary-700 dark:text-primary-300">
                                     <SpeakerWaveIcon class="h-4 w-4" />
-                                    فایل صدا
+                                    {{ t('common.audioFile') }}
                                 </a>
                             </div>
                         </div>
 
                         <div v-if="!currentSide.images?.length && !currentSide.audios?.length" class="mt-5 flex items-center gap-2 text-xs text-slate-400 dark:text-neutral-500">
                             <PhotoIcon class="h-4 w-4" />
-                            رسانه‌ای برای این رو ثبت نشده است.
+                            {{ t('common.noMedia') }}
                         </div>
                     </div>
 
@@ -264,7 +265,7 @@ onMounted(fetchCards);
                             class="h-2.5 rounded-full transition-all"
                             :class="index === currentSideIndex ? 'w-7 bg-primary-600' : 'w-2.5 bg-slate-300 hover:bg-primary-300 dark:bg-neutral-700'"
                             type="button"
-                            :aria-label="`رفتن به روی ${side.side_number}`"
+                            :aria-label="t('study.goToSide', { number: side.side_number })"
                             @click="goToSide(index)"
                         />
                     </div>
@@ -275,8 +276,8 @@ onMounted(fetchCards);
                 <button
                     class="grid h-12 w-12 place-items-center rounded-md border border-slate-200 text-slate-700 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-200 dark:hover:text-primary-300"
                     type="button"
-                    aria-label="کارت بعد"
-                    title="کارت بعد"
+                    :aria-label="t('study.nextCard')"
+                    :title="t('study.nextCard')"
                     @click="nextCard"
                 >
                     <ChevronRightIcon class="h-5 w-5" />
@@ -286,8 +287,8 @@ onMounted(fetchCards);
                     class="grid h-12 w-12 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-primary-300"
                     type="button"
                     :disabled="submitting"
-                    aria-label="گام دلخواه"
-                    title="گام دلخواه"
+                    :aria-label="t('common.customStep')"
+                    :title="t('common.customStep')"
                     @click="customOpen = true"
                 >
                     <ArrowsRightLeftIcon class="h-6 w-6" />
@@ -296,8 +297,8 @@ onMounted(fetchCards);
                 <button
                     class="grid h-12 w-12 place-items-center rounded-md border border-slate-200 text-slate-700 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-200 dark:hover:text-primary-300"
                     type="button"
-                    aria-label="کارت قبل"
-                    title="کارت قبل"
+                    :aria-label="t('study.previousCard')"
+                    :title="t('study.previousCard')"
                     @click="previousCard"
                 >
                     <ChevronLeftIcon class="h-5 w-5" />
@@ -307,24 +308,24 @@ onMounted(fetchCards);
 
         <div v-if="customOpen" class="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8">
             <section class="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-5 shadow-xl dark:border-neutral-700 dark:bg-neutral-950">
-                <h2 class="mb-4 text-lg font-bold">انتخاب گام دلخواه</h2>
+                <h2 class="mb-4 text-lg font-bold">{{ t('common.selectCustomStep') }}</h2>
                 <select
                     v-model.number="customStep"
                     class="mb-4 h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black"
                 >
-                    <option v-for="step in maxStep + 1" :key="step - 1" :value="step - 1">گام {{ step - 1 }}</option>
+                    <option v-for="step in maxStep + 1" :key="step - 1" :value="step - 1">{{ t('common.step', { number: step - 1 }) }}</option>
                 </select>
                 <div class="mb-4 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-neutral-900 dark:text-neutral-400">
-                    بعد از ثبت، موعد کارت بر اساس گام جدید دوباره محاسبه می‌شود.
+                    {{ t('study.rescheduleHint') }}
                 </div>
                 <div class="flex justify-end gap-2">
                     <button class="h-10 rounded-md border border-slate-200 px-4 text-sm font-semibold dark:border-neutral-700" type="button" @click="customOpen = false">
-                        انصراف
+                        {{ t('common.cancel') }}
                     </button>
                     <button class="inline-flex h-10 items-center gap-2 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50" type="button" :disabled="submitting" @click="moveToCustomStep">
                         <ArrowPathIcon v-if="submitting" class="h-5 w-5 animate-spin" />
                         <ArrowsRightLeftIcon v-else class="h-5 w-5" />
-                        ثبت
+                        {{ t('common.submit') }}
                     </button>
                 </div>
             </section>

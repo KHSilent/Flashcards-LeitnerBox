@@ -14,6 +14,13 @@
         <link rel="icon" type="image/svg+xml" href="/favicon.svg">
         <link rel="apple-touch-icon" href="/icon-192.png">
         <link rel="manifest" href="/manifest.webmanifest">
+        <script>
+            try {
+                const locale = localStorage.getItem('flashcard.locale') === 'en' ? 'en' : 'fa';
+                document.documentElement.lang = locale;
+                document.documentElement.dir = locale === 'fa' ? 'rtl' : 'ltr';
+            } catch (_) {}
+        </script>
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         <script>
             if ('serviceWorker' in navigator) {

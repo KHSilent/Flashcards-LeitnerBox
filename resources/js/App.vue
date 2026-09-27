@@ -14,6 +14,8 @@ import {
 } from '@heroicons/vue/24/outline';
 import { auth } from './stores/auth';
 import { theme } from './stores/theme';
+import { t } from './i18n';
+import LanguageSwitcher from './components/LanguageSwitcher.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -21,9 +23,9 @@ const isLogin = computed(() => route.name === 'login');
 const mobileMenuOpen = ref(false);
 const logoUrl = '/fc-logo.svg';
 const themeOptions = [
-    { mode: 'light', label: 'روشن', icon: SunIcon },
-    { mode: 'dark', label: 'تاریک', icon: MoonIcon },
-    { mode: 'system', label: 'سیستم', icon: ComputerDesktopIcon },
+    { mode: 'light', labelKey: 'common.light', icon: SunIcon },
+    { mode: 'dark', labelKey: 'common.dark', icon: MoonIcon },
+    { mode: 'system', labelKey: 'common.system', icon: ComputerDesktopIcon },
 ];
 const currentThemeOption = computed(() => themeOptions.find((option) => option.mode === theme.mode) || themeOptions[0]);
 
@@ -57,8 +59,8 @@ watch(() => route.fullPath, closeMobileMenu);
                     <button
                         class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-700 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-200"
                         type="button"
-                        title="منو"
-                        aria-label="منو"
+                        :title="t('common.menu')"
+                        :aria-label="t('common.menu')"
                         @click="mobileMenuOpen = true"
                     >
                         <Bars3Icon class="h-6 w-6" />
@@ -73,7 +75,7 @@ watch(() => route.fullPath, closeMobileMenu);
                     <img :src="logoUrl" alt="FC" class="h-10 w-10 rounded-lg shadow-sm">
                     <div>
                         <p class="text-sm font-bold text-primary-700 dark:text-primary-300">FlashCard</p>
-                        <p class="text-xs text-slate-500 dark:text-neutral-400">سیستم مطالعه لایتنر</p>
+                        <p class="text-xs text-slate-500 dark:text-neutral-400">{{ t('app.subtitle') }}</p>
                     </div>
                 </RouterLink>
 
@@ -81,7 +83,7 @@ watch(() => route.fullPath, closeMobileMenu);
                     <RouterLink
                         :to="{ name: 'categories' }"
                         class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
-                        title="دسته‌ها"
+                        :title="t('nav.categories')"
                     >
                         <HomeIcon class="h-5 w-5" />
                     </RouterLink>
@@ -90,16 +92,18 @@ watch(() => route.fullPath, closeMobileMenu);
                         v-if="auth.hasRole('manageUser')"
                         :to="{ name: 'users' }"
                         class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
-                        title="کاربران"
+                        :title="t('nav.users')"
                     >
                         <UsersIcon class="h-5 w-5" />
                     </RouterLink>
 
+                    <LanguageSwitcher />
+
                     <button
                         class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
                         type="button"
-                        :title="`تم: ${currentThemeOption.label}`"
-                        :aria-label="`تم: ${currentThemeOption.label}`"
+                        :title="t('common.theme', { theme: t(currentThemeOption.labelKey) })"
+                        :aria-label="t('common.theme', { theme: t(currentThemeOption.labelKey) })"
                         @click="cycleTheme"
                     >
                         <component :is="currentThemeOption.icon" class="h-5 w-5" />
@@ -108,7 +112,7 @@ watch(() => route.fullPath, closeMobileMenu);
                     <RouterLink
                         :to="{ name: 'profile' }"
                         class="flex h-10 items-center gap-2 rounded-md border border-slate-200 px-2 hover:border-primary-400 dark:border-neutral-700"
-                        title="پروفایل"
+                        :title="t('nav.profile')"
                     >
                         <img
                             v-if="auth.user?.avatar_url"
@@ -125,8 +129,8 @@ watch(() => route.fullPath, closeMobileMenu);
                     <button
                         class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-700 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-200"
                         type="button"
-                        title="خروج"
-                        aria-label="خروج"
+                        :title="t('nav.logout')"
+                        :aria-label="t('nav.logout')"
                         @click="logout"
                     >
                         <ArrowRightStartOnRectangleIcon class="h-5 w-5" />
@@ -136,7 +140,7 @@ watch(() => route.fullPath, closeMobileMenu);
                 <RouterLink
                     :to="{ name: 'profile' }"
                     class="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white dark:border-neutral-700 dark:bg-black md:hidden"
-                    title="پروفایل"
+                    :title="t('nav.profile')"
                 >
                     <img
                         v-if="auth.user?.avatar_url"
@@ -155,19 +159,19 @@ watch(() => route.fullPath, closeMobileMenu);
                 class="fixed inset-0 z-50 bg-black/35 backdrop-blur-sm md:hidden"
                 @click.self="closeMobileMenu"
             >
-                <aside class="fixed right-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-black">
+                <aside class="fixed start-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-e border-slate-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-black">
                     <div class="flex items-center justify-between border-b border-slate-200 px-4 py-4 dark:border-neutral-800">
                         <RouterLink :to="{ name: 'categories' }" class="flex items-center gap-3">
                             <img :src="logoUrl" alt="FC" class="h-10 w-10 rounded-lg shadow-sm">
                             <div>
                                 <p class="text-sm font-bold text-primary-700 dark:text-primary-300">FlashCard</p>
-                                <p class="text-xs text-slate-500 dark:text-neutral-400">سیستم مطالعه لایتنر</p>
+                                <p class="text-xs text-slate-500 dark:text-neutral-400">{{ t('app.subtitle') }}</p>
                             </div>
                         </RouterLink>
                         <button
                             class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 dark:border-neutral-700 dark:text-neutral-300"
                             type="button"
-                            aria-label="بستن"
+                            :aria-label="t('common.close')"
                             @click="closeMobileMenu"
                         >
                             <XMarkIcon class="h-5 w-5" />
@@ -180,7 +184,7 @@ watch(() => route.fullPath, closeMobileMenu);
                             class="flex h-11 items-center gap-3 rounded-md px-3 text-sm font-bold text-slate-700 hover:bg-primary-50 hover:text-primary-700 dark:text-neutral-200 dark:hover:bg-neutral-900 dark:hover:text-primary-300"
                         >
                             <HomeIcon class="h-5 w-5" />
-                            دسته‌ها
+                            {{ t('nav.categories') }}
                         </RouterLink>
                         <RouterLink
                             v-if="auth.hasRole('manageUser')"
@@ -188,14 +192,14 @@ watch(() => route.fullPath, closeMobileMenu);
                             class="flex h-11 items-center gap-3 rounded-md px-3 text-sm font-bold text-slate-700 hover:bg-primary-50 hover:text-primary-700 dark:text-neutral-200 dark:hover:bg-neutral-900 dark:hover:text-primary-300"
                         >
                             <UsersIcon class="h-5 w-5" />
-                            کاربران
+                            {{ t('nav.users') }}
                         </RouterLink>
                         <RouterLink
                             :to="{ name: 'profile' }"
                             class="flex h-11 items-center gap-3 rounded-md px-3 text-sm font-bold text-slate-700 hover:bg-primary-50 hover:text-primary-700 dark:text-neutral-200 dark:hover:bg-neutral-900 dark:hover:text-primary-300"
                         >
                             <UserCircleIcon class="h-5 w-5" />
-                            پروفایل
+                            {{ t('nav.profile') }}
                         </RouterLink>
                     </nav>
 
@@ -213,13 +217,14 @@ watch(() => route.fullPath, closeMobileMenu);
                                 <p class="truncate text-xs text-slate-500 dark:text-neutral-400">{{ auth.user?.email }}</p>
                             </div>
                         </div>
+                        <LanguageSwitcher class="mb-3 w-full justify-center" />
                         <button
                             class="flex h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-bold text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
                             type="button"
                             @click="logout"
                         >
                             <ArrowRightStartOnRectangleIcon class="h-5 w-5" />
-                            خروج
+                            {{ t('nav.logout') }}
                         </button>
                     </div>
                 </aside>

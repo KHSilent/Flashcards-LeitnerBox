@@ -16,7 +16,7 @@ class SmartFlashcardProcessor
     {
         if (! in_array($flashcard->type, [Flashcard::TYPE_ENGLISH_ACTIVE, Flashcard::TYPE_ENGLISH_PASSIVE], true)) {
             throw ValidationException::withMessages([
-                'type' => 'پردازش هوشمند فقط برای کارت‌های انگلیسی فعال و انگلیسی پسیو فعال است.',
+                'type' => 'Smart processing is only available for active and passive English cards.',
             ]);
         }
 
@@ -24,7 +24,7 @@ class SmartFlashcardProcessor
 
         if (! $apiKey) {
             throw ValidationException::withMessages([
-                'openai' => 'OPENAI_API_KEY تنظیم نشده است.',
+                'openai' => 'OPENAI_API_KEY is not configured.',
             ]);
         }
 
@@ -51,7 +51,7 @@ class SmartFlashcardProcessor
 
         if ($source === '') {
             throw ValidationException::withMessages([
-                'content' => 'برای پردازش هوشمند، کارت باید حداقل عنوان یا متن روی اول داشته باشد.',
+                'content' => 'A card must have a title or content on its first side before smart processing.',
             ]);
         }
 
@@ -90,7 +90,7 @@ class SmartFlashcardProcessor
 
         if ($response->failed()) {
             throw ValidationException::withMessages([
-                'openai' => 'دریافت متن از OpenAI انجام نشد.',
+                'openai' => 'Could not generate text with OpenAI.',
             ]);
         }
 
@@ -100,7 +100,7 @@ class SmartFlashcardProcessor
 
         if (! is_array($data)) {
             throw ValidationException::withMessages([
-                'openai' => 'خروجی متنی OpenAI قابل خواندن نبود.',
+                'openai' => 'The OpenAI text output could not be read.',
             ]);
         }
 
@@ -129,7 +129,7 @@ class SmartFlashcardProcessor
 
         if ($response->failed()) {
             throw ValidationException::withMessages([
-                'openai' => 'ساخت ویس تلفظ انجام نشد.',
+                'openai' => 'Could not generate pronunciation audio.',
             ]);
         }
 
@@ -168,7 +168,7 @@ class SmartFlashcardProcessor
             ]);
 
             throw ValidationException::withMessages([
-                'openai' => $this->openAiErrorMessage($response, 'ساخت تصویر آموزشی انجام نشد.'),
+                'openai' => $this->openAiErrorMessage($response, 'Could not generate the educational image.'),
             ]);
         }
 
@@ -183,7 +183,7 @@ class SmartFlashcardProcessor
             ]);
 
             throw ValidationException::withMessages([
-                'openai' => 'خروجی تصویر OpenAI قابل ذخیره نبود.',
+                'openai' => 'The OpenAI image output could not be saved.',
             ]);
         }
 

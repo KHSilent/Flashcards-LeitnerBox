@@ -11,6 +11,7 @@ import {
     XMarkIcon,
 } from '@heroicons/vue/24/outline';
 import AutoDirContent from './AutoDirContent.vue';
+import { apiError, t } from '../i18n';
 
 const props = defineProps({
     categoryId: { type: Number, required: true },
@@ -29,15 +30,15 @@ const error = ref('');
 const message = ref('');
 const flashcards = ref([]);
 const typeOptions = [
-    { value: 'english-active', label: 'English Active' },
-    { value: 'english-passive', label: 'English Passive' },
-    { value: 'other', label: 'Other' },
+    { value: 'english-active', labelKey: 'cards.englishActive' },
+    { value: 'english-passive', labelKey: 'cards.englishPassive' },
+    { value: 'other', labelKey: 'cards.otherType' },
 ];
 const smartTypeOptions = typeOptions.filter((option) => ['english-active', 'english-passive'].includes(option.value));
 const createTabs = [
-    { value: 'single', label: 'تکی' },
-    { value: 'smart', label: 'چنتایی هوشمند' },
-    { value: 'normal', label: 'چنتایی معمولی' },
+    { value: 'single', labelKey: 'cards.single' },
+    { value: 'smart', labelKey: 'cards.smart' },
+    { value: 'normal', labelKey: 'cards.normal' },
 ];
 const pagination = reactive({
     current_page: 1,
@@ -66,22 +67,18 @@ const editingCard = computed(() => flashcards.value.find((card) => card.id === e
 const canSmartProcessPreview = computed(() => ['english-active', 'english-passive'].includes(previewCard.value?.type));
 const modalSubmitLabel = computed(() => {
     if (editingId.value) {
-        return 'ذخیره';
+        return t('common.save');
     }
 
-    return modalTab.value === 'smart' || modalTab.value === 'normal' ? 'افزودن کارت‌ها' : 'ذخیره';
+    return t(modalTab.value === 'smart' || modalTab.value === 'normal' ? 'cards.addCards' : 'common.save');
 });
 const bulkNormalRows = computed(() => bulkNormalForm.sides.map((side) => splitRows(side.content)));
 const bulkNormalLineCount = computed(() => Math.max(0, ...bulkNormalRows.value.map((rows) => rows.length)));
 const bulkNormalHasCard = computed(() => Array.from({ length: bulkNormalLineCount.value }).some((_, index) => bulkNormalRows.value.some((rows) => (rows[index] || '').trim() !== '')));
 const bulkNormalLineMismatch = computed(() => bulkNormalForm.sides.length < 2 || !bulkNormalHasCard.value);
 
-function firstError(exception, fallback) {
-    return exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || fallback;
-}
-
 function typeLabel(type) {
-    return typeOptions.find((option) => option.value === type)?.label || 'Other';
+    return t(typeOptions.find((option) => option.value === type)?.labelKey || 'cards.otherType');
 }
 
 function blankSide(content = '', sideNumber = nextSideNumber()) {
@@ -256,7 +253,7 @@ async function fetchCards(page = pagination.current_page) {
         Object.assign(pagination, data.meta);
         pageInput.value = pagination.current_page;
     } catch (exception) {
-        error.value = firstError(exception, 'دریافت کارت‌ها انجام نشد.');
+        error.value = apiError(exception, 'cards.fetchFailed');
     } finally {
         loading.value = false;
     }
@@ -284,18 +281,18 @@ async function saveCard() {
     try {
         if (editingId.value) {
             await window.axios.post(`/api/categories/${props.categoryId}/flashcards/${editingId.value}`, payload('PUT'));
-            message.value = 'کارت ویرایش شد.';
+            message.value = t('cards.updated');
             await fetchCards(pagination.current_page);
         } else {
             await window.axios.post(`/api/categories/${props.categoryId}/flashcards`, payload());
-            message.value = 'کارت اضافه شد.';
+            message.value = t('cards.created');
             await fetchCards(1);
         }
 
         closeModal();
         emit('changed');
     } catch (exception) {
-        error.value = firstError(exception, 'ذخیره کارت انجام نشد.');
+        error.value = apiError(exception, 'cards.saveFailed');
     } finally {
         saving.value = false;
     }
@@ -326,12 +323,12 @@ async function saveBulkSmart() {
             items: bulkSmartForm.items,
         });
 
-        message.value = `${data.created} کارت به صف پردازش هوشمند اضافه شد.`;
+        message.value = t('cards.smartQueuedCount', { count: data.created });
         await fetchCards(1);
         closeModal();
         emit('changed');
     } catch (exception) {
-        error.value = firstError(exception, 'افزودن کارت‌های هوشمند انجام نشد.');
+        error.value = apiError(exception, 'cards.smartBulkFailed');
     } finally {
         saving.value = false;
     }
@@ -339,7 +336,7 @@ async function saveBulkSmart() {
 
 async function saveBulkNormal() {
     if (bulkNormalLineMismatch.value) {
-        error.value = 'حداقل یک کارت با متن وارد کنید.';
+        error.value = t('cards.textRequired');
         return;
     }
 
@@ -353,19 +350,19 @@ async function saveBulkNormal() {
             sides: bulkNormalForm.sides,
         });
 
-        message.value = `${data.created} کارت اضافه شد.`;
+        message.value = t('cards.bulkCreated', { count: data.created });
         await fetchCards(1);
         closeModal();
         emit('changed');
     } catch (exception) {
-        error.value = firstError(exception, 'افزودن چندتایی کارت‌ها انجام نشد.');
+        error.value = apiError(exception, 'cards.bulkFailed');
     } finally {
         saving.value = false;
     }
 }
 
 async function deleteCard(card) {
-    if (!window.confirm('این کارت حذف شود؟')) {
+    if (!window.confirm(t('cards.deleteConfirm'))) {
         return;
     }
 
@@ -375,14 +372,14 @@ async function deleteCard(card) {
 
     try {
         await window.axios.delete(`/api/categories/${props.categoryId}/flashcards/${card.id}`);
-        message.value = 'کارت حذف شد.';
+        message.value = t('cards.deleted');
         const nextPage = flashcards.value.length === 1 && pagination.current_page > 1
             ? pagination.current_page - 1
             : pagination.current_page;
         await fetchCards(nextPage);
         emit('changed');
     } catch (exception) {
-        error.value = firstError(exception, 'حذف کارت انجام نشد.');
+        error.value = apiError(exception, 'cards.deleteFailed');
     } finally {
         saving.value = false;
     }
@@ -402,10 +399,10 @@ async function smartProcess(card) {
         }
 
         previewCard.value = data.flashcard;
-        message.value = 'کارت به صف پردازش هوشمند اضافه شد.';
+        message.value = t('cards.smartQueued');
         emit('changed');
     } catch (exception) {
-        error.value = firstError(exception, 'پردازش هوشمند انجام نشد.');
+        error.value = apiError(exception, 'cards.smartFailed');
     } finally {
         smartProcessing.value = false;
     }
@@ -417,15 +414,15 @@ function isAiQueued(card) {
 
 function aiStatusLabel(card) {
     if (card?.ai_processing_status === 'processing') {
-        return 'درحال پردازش هوشمند';
+        return t('cards.processing');
     }
 
     if (card?.ai_processing_status === 'pending' || card?.needs_ai_processing) {
-        return 'در صف پردازش هوشمند';
+        return t('cards.queued');
     }
 
     if (card?.ai_processing_status === 'failed') {
-        return 'پردازش ناموفق';
+        return t('cards.processingFailed');
     }
 
     return '';
@@ -440,14 +437,14 @@ onMounted(() => fetchCards(1));
             <div class="flex items-center gap-2">
                 <QueueListIcon class="h-5 w-5 text-primary-600" />
                 <div>
-                    <h2 class="font-bold">مدیریت کارت‌ها</h2>
+                    <h2 class="font-bold">{{ t('cards.manage') }}</h2>
                 </div>
             </div>
             <button
                 class="grid h-10 w-10 place-items-center rounded-md border border-primary-200 text-primary-700 hover:border-primary-400 hover:bg-primary-50 dark:border-neutral-700 dark:text-primary-300 dark:hover:bg-neutral-900"
                 type="button"
-                aria-label="افزودن کارت"
-                title="افزودن کارت"
+                :aria-label="t('cards.add')"
+                :title="t('cards.add')"
                 @click="openCreateModal"
             >
                 <PlusIcon class="h-5 w-5" />
@@ -462,7 +459,7 @@ onMounted(() => fetchCards(1));
                 {{ error }}
             </p>
 
-            <div v-if="loading" class="text-sm text-slate-500 dark:text-neutral-400">در حال دریافت کارت‌ها...</div>
+            <div v-if="loading" class="text-sm text-slate-500 dark:text-neutral-400">{{ t('cards.loading') }}</div>
 
             <div v-else class="space-y-3">
                 <article
@@ -472,12 +469,12 @@ onMounted(() => fetchCards(1));
                 >
                     <div class="min-w-0">
                         <div class="mb-2 flex flex-wrap items-center gap-2">
-                            <p class="truncate font-bold">{{ card.title || `کارت ${card.id}` }}</p>
+                            <p class="truncate font-bold">{{ card.title || t('cards.fallbackTitle', { id: card.id }) }}</p>
                             <span class="rounded-md bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700 dark:bg-neutral-900 dark:text-primary-300">
                                 {{ typeLabel(card.type) }}
                             </span>
                             <span class="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-neutral-900 dark:text-neutral-300">
-                                {{ card.sides.length }} رو
+                                {{ t('cards.sides', { count: card.sides.length }) }}
                             </span>
                             <span
                                 v-if="aiStatusLabel(card)"
@@ -496,7 +493,7 @@ onMounted(() => fetchCards(1));
                         <button
                             class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
                             type="button"
-                            title="پیش‌نمایش"
+                            :title="t('cards.preview')"
                             @click="openPreview(card)"
                         >
                             <EyeIcon class="h-5 w-5" />
@@ -504,7 +501,7 @@ onMounted(() => fetchCards(1));
                         <button
                             class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
                             type="button"
-                            title="ویرایش"
+                            :title="t('common.edit')"
                             @click="openEditModal(card)"
                         >
                             <PencilSquareIcon class="h-5 w-5" />
@@ -512,7 +509,7 @@ onMounted(() => fetchCards(1));
                         <button
                             class="grid h-10 w-10 place-items-center rounded-md border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-40 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950/40"
                             type="button"
-                            title="حذف"
+                            :title="t('common.delete')"
                             :disabled="saving"
                             @click="deleteCard(card)"
                         >
@@ -522,14 +519,14 @@ onMounted(() => fetchCards(1));
                 </article>
 
                 <div v-if="!flashcards.length" class="rounded-lg border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500 dark:border-neutral-800 dark:text-neutral-400">
-                    هنوز کارتی برای این دسته ثبت نشده است.
+                    {{ t('cards.empty') }}
                 </div>
             </div>
         </div>
 
         <footer v-if="pagination.total" class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm dark:border-neutral-800">
             <p class="text-slate-500 dark:text-neutral-400">
-                نمایش {{ pagination.from }} تا {{ pagination.to }} از {{ pagination.total }}
+                {{ t('common.fromToTotal', { from: pagination.from, to: pagination.to, total: pagination.total }) }}
             </p>
             <div class="flex flex-wrap items-center gap-2">
                 <button
@@ -538,7 +535,7 @@ onMounted(() => fetchCards(1));
                     :disabled="pagination.current_page <= 1 || loading"
                     @click="fetchCards(pagination.current_page - 1)"
                 >
-                    قبلی
+                    {{ t('common.previous') }}
                 </button>
                 <span class="min-w-20 text-center text-slate-600 dark:text-neutral-300">
                     {{ pagination.current_page }} / {{ pagination.last_page }}
@@ -560,7 +557,7 @@ onMounted(() => fetchCards(1));
                         :disabled="loading"
                         @click="goToPage"
                     >
-                        برو
+                        {{ t('common.go') }}
                     </button>
                 </div>
                 <button
@@ -569,7 +566,7 @@ onMounted(() => fetchCards(1));
                     :disabled="pagination.current_page >= pagination.last_page || loading"
                     @click="fetchCards(pagination.current_page + 1)"
                 >
-                    بعدی
+                    {{ t('common.next') }}
                 </button>
             </div>
         </footer>
@@ -580,9 +577,9 @@ onMounted(() => fetchCards(1));
                     <div class="flex items-center gap-2">
                         <PlusIcon v-if="!editingId" class="h-5 w-5 text-primary-600" />
                         <PencilSquareIcon v-else class="h-5 w-5 text-primary-600" />
-                        <h2 class="text-lg font-bold">{{ editingId ? 'ویرایش کارت' : 'کارت جدید' }}</h2>
+                        <h2 class="text-lg font-bold">{{ t(editingId ? 'cards.edit' : 'cards.new') }}</h2>
                     </div>
-                    <button class="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-neutral-900" type="button" aria-label="بستن" @click="closeModal">
+                    <button class="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-neutral-900" type="button" :aria-label="t('common.close')" @click="closeModal">
                         <XMarkIcon class="h-5 w-5" />
                     </button>
                 </header>
@@ -597,21 +594,21 @@ onMounted(() => fetchCards(1));
                             type="button"
                             @click="modalTab = tab.value"
                         >
-                            {{ tab.label }}
+                            {{ t(tab.labelKey) }}
                         </button>
                     </div>
 
                     <template v-if="editingId || modalTab === 'single'">
                         <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
                             <label class="block">
-                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">عنوان</span>
+                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('common.title') }}</span>
                                 <input v-model="form.title" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
                             </label>
                             <label class="block">
-                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">نوع</span>
+                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('common.type') }}</span>
                                 <select v-model="form.type" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
                                     <option v-for="option in typeOptions" :key="option.value" :value="option.value">
-                                        {{ option.label }}
+                                        {{ t(option.labelKey) }}
                                     </option>
                                 </select>
                             </label>
@@ -624,7 +621,7 @@ onMounted(() => fetchCards(1));
                         >
                             <div class="mb-3 flex items-center justify-between gap-3">
                                 <div class="flex items-center gap-3">
-                                    <h3 class="font-bold">روی</h3>
+                                    <h3 class="font-bold">{{ t('cards.side') }}</h3>
                                     <input
                                         v-model.number="side.side_number"
                                         class="h-9 w-20 rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black"
@@ -640,29 +637,29 @@ onMounted(() => fetchCards(1));
                                     :disabled="form.sides.length <= 1"
                                     @click="removeSide(index)"
                                 >
-                                    حذف رو
+                                    {{ t('cards.removeSide') }}
                                 </button>
                             </div>
 
                             <label class="mb-3 block">
-                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">متن</span>
+                                <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('cards.text') }}</span>
                                 <textarea v-model="side.content" class="min-h-28 w-full rounded-md border border-slate-200 bg-white px-3 py-2 leading-7 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="auto" required />
                             </label>
 
                             <div class="grid gap-3 md:grid-cols-2">
                                 <label class="block">
-                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">لینک تصاویر</span>
+                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('cards.imageLinks') }}</span>
                                     <textarea v-model="side.images_text" class="min-h-20 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm leading-6 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" />
                                 </label>
                                 <label class="block">
-                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">لینک ویس‌ها</span>
+                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('cards.audioLinks') }}</span>
                                     <textarea v-model="side.audios_text" class="min-h-20 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm leading-6 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" />
                                 </label>
                             </div>
 
                             <div class="mt-3 grid gap-3 md:grid-cols-2">
                                 <label class="block">
-                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">فایل تصویر</span>
+                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('cards.imageFile') }}</span>
                                     <input
                                         class="block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-black"
                                         type="file"
@@ -672,7 +669,7 @@ onMounted(() => fetchCards(1));
                                     >
                                 </label>
                                 <label class="block">
-                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">فایل ویس</span>
+                                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('cards.voiceFile') }}</span>
                                     <input
                                         class="block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-black"
                                         type="file"
@@ -690,32 +687,32 @@ onMounted(() => fetchCards(1));
                             @click="addSide"
                         >
                             <PlusIcon class="h-5 w-5" />
-                            افزودن رو
+                            {{ t('cards.addSide') }}
                         </button>
                     </template>
 
                     <template v-else-if="modalTab === 'smart'">
                         <label class="block">
-                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">نوع</span>
+                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('common.type') }}</span>
                             <select v-model="bulkSmartForm.type" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
                                 <option v-for="option in smartTypeOptions" :key="option.value" :value="option.value">
-                                    {{ option.label }}
+                                    {{ t(option.labelKey) }}
                                 </option>
                             </select>
                         </label>
                         <label class="block">
-                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">هر خط یک کلمه</span>
+                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('cards.oneWordPerLine') }}</span>
                             <textarea v-model="bulkSmartForm.items" class="min-h-72 w-full rounded-md border border-slate-200 bg-white px-3 py-2 leading-7 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="auto" required />
-                            <span class="mt-1 block text-xs text-slate-500 dark:text-neutral-400">{{ splitLines(bulkSmartForm.items).length }} کلمه</span>
+                            <span class="mt-1 block text-xs text-slate-500 dark:text-neutral-400">{{ t('cards.wordCount', { count: splitLines(bulkSmartForm.items).length }) }}</span>
                         </label>
                     </template>
 
                     <template v-else>
                         <label class="block">
-                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">نوع</span>
+                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('common.type') }}</span>
                             <select v-model="bulkNormalForm.type" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
                                 <option v-for="option in typeOptions" :key="option.value" :value="option.value">
-                                    {{ option.label }}
+                                    {{ t(option.labelKey) }}
                                 </option>
                             </select>
                         </label>
@@ -727,7 +724,7 @@ onMounted(() => fetchCards(1));
                         >
                             <div class="mb-3 flex items-center justify-between gap-3">
                                 <div class="flex items-center gap-3">
-                                    <h3 class="font-bold">روی</h3>
+                                    <h3 class="font-bold">{{ t('cards.side') }}</h3>
                                     <input
                                         v-model.number="side.side_number"
                                         class="h-9 w-20 rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black"
@@ -743,18 +740,18 @@ onMounted(() => fetchCards(1));
                                     :disabled="bulkNormalForm.sides.length <= 2"
                                     @click="removeBulkNormalSide(index)"
                                 >
-                                    حذف رو
+                                    {{ t('cards.removeSide') }}
                                 </button>
                             </div>
                             <textarea v-model="side.content" class="min-h-40 w-full rounded-md border border-slate-200 bg-white px-3 py-2 leading-7 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="auto" required />
-                            <span class="mt-1 block text-xs text-slate-500 dark:text-neutral-400">{{ splitRows(side.content).length }} ردیف</span>
+                            <span class="mt-1 block text-xs text-slate-500 dark:text-neutral-400">{{ t('cards.rowCount', { count: splitRows(side.content).length }) }}</span>
                         </section>
 
                         <p v-if="bulkNormalLineMismatch" class="rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-                            حداقل یک کارت با متن وارد کنید.
+                            {{ t('cards.textRequired') }}
                         </p>
                         <p v-else class="text-xs text-slate-500 dark:text-neutral-400">
-                            {{ bulkNormalLineCount }} کارت ساخته می‌شود.
+                            {{ t('cards.generatedCount', { count: bulkNormalLineCount }) }}
                         </p>
 
                         <button
@@ -763,14 +760,14 @@ onMounted(() => fetchCards(1));
                             @click="addBulkNormalSide"
                         >
                             <PlusIcon class="h-5 w-5" />
-                            افزودن رو
+                            {{ t('cards.addSide') }}
                         </button>
                     </template>
                 </div>
 
                 <footer class="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4 dark:border-neutral-800 dark:bg-neutral-950">
                     <button class="h-10 rounded-md border border-slate-200 px-4 text-sm font-semibold dark:border-neutral-700" type="button" @click="closeModal">
-                        انصراف
+                        {{ t('common.cancel') }}
                     </button>
                     <button class="h-10 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50" type="submit" :disabled="saving || (!editingId && modalTab === 'normal' && bulkNormalLineMismatch)">
                         {{ modalSubmitLabel }}
@@ -784,12 +781,12 @@ onMounted(() => fetchCards(1));
                 <header class="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 dark:border-neutral-800 dark:bg-neutral-950">
                     <div class="min-w-0">
                         <div class="mb-2 flex flex-wrap items-center gap-2">
-                            <h2 class="truncate text-lg font-bold">{{ previewCard.title || `کارت ${previewCard.id}` }}</h2>
+                            <h2 class="truncate text-lg font-bold">{{ previewCard.title || t('cards.fallbackTitle', { id: previewCard.id }) }}</h2>
                             <span class="rounded-md bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700 dark:bg-neutral-900 dark:text-primary-300">
                                 {{ typeLabel(previewCard.type) }}
                             </span>
                             <span class="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-neutral-900 dark:text-neutral-300">
-                                {{ previewCard.sides.length }} رو
+                                {{ t('cards.sides', { count: previewCard.sides.length }) }}
                             </span>
                             <span
                                 v-if="aiStatusLabel(previewCard)"
@@ -799,7 +796,7 @@ onMounted(() => fetchCards(1));
                                 {{ aiStatusLabel(previewCard) }}
                             </span>
                         </div>
-                        <p class="text-xs text-slate-500 dark:text-neutral-400">پیش‌نمایش کارت</p>
+                        <p class="text-xs text-slate-500 dark:text-neutral-400">{{ t('cards.cardPreview') }}</p>
                     </div>
                     <div class="flex shrink-0 items-center gap-2">
                         <button
@@ -811,9 +808,9 @@ onMounted(() => fetchCards(1));
                         >
                             <ArrowPathIcon v-if="smartProcessing" class="h-4 w-4 animate-spin" />
                             <SparklesIcon v-else class="h-4 w-4" />
-                            {{ isAiQueued(previewCard) ? 'در صف' : 'پردازش هوشمند' }}
+                            {{ t(isAiQueued(previewCard) ? 'cards.inQueue' : 'cards.smartProcess') }}
                         </button>
-                        <button class="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-neutral-900" type="button" aria-label="بستن" @click="closePreview">
+                        <button class="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-neutral-900" type="button" :aria-label="t('common.close')" @click="closePreview">
                             <XMarkIcon class="h-5 w-5" />
                         </button>
                     </div>
@@ -826,7 +823,7 @@ onMounted(() => fetchCards(1));
                         class="overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-neutral-800 dark:bg-black"
                     >
                         <header class="border-b border-slate-200 px-4 py-3 dark:border-neutral-800">
-                            <h3 class="text-sm font-bold text-slate-700 dark:text-neutral-200">روی {{ side.side_number }}</h3>
+                            <h3 class="text-sm font-bold text-slate-700 dark:text-neutral-200">{{ t('common.side', { number: side.side_number }) }}</h3>
                         </header>
 
                         <div class="space-y-4 p-4">
@@ -841,7 +838,7 @@ onMounted(() => fetchCards(1));
                                     rel="noreferrer"
                                     class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-950"
                                 >
-                                    <img :src="image" :alt="`روی ${side.side_number}`" class="h-56 w-full object-contain" loading="lazy">
+                                    <img :src="image" :alt="t('common.side', { number: side.side_number })" class="h-56 w-full object-contain" loading="lazy">
                                 </a>
                             </div>
 

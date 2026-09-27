@@ -159,7 +159,7 @@ class CategoryController extends Controller
 
         $category->loadCount(['children', 'flashcards']);
 
-        abort_if($category->children_count > 0 || $category->flashcards_count > 0, 422, 'این دسته زیرمجموعه یا کارت دارد و قابل حذف نیست.');
+        abort_if($category->children_count > 0 || $category->flashcards_count > 0, 422, 'This category contains subcategories or cards and cannot be deleted.');
 
         $category->delete();
 

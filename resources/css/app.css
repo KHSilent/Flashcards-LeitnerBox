@@ -27,6 +27,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+    html[lang='en'] {
+        font-family: ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+    }
+
     @font-face {
         font-family: 'IRANYekanX';
         src: url('../fonts/iranyekanx/IRANYekanX-Thin.woff2') format('woff2');

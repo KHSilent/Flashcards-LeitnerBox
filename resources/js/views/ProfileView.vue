@@ -10,6 +10,7 @@ import {
 } from '@heroicons/vue/24/outline';
 import { auth } from '../stores/auth';
 import { theme } from '../stores/theme';
+import { apiError, t } from '../i18n';
 
 const activeTab = ref('general');
 const saving = ref(false);
@@ -28,9 +29,9 @@ const passwordForm = reactive({
 });
 
 const themeOptions = [
-    { mode: 'light', label: 'روشن', icon: SunIcon },
-    { mode: 'dark', label: 'تاریک', icon: MoonIcon },
-    { mode: 'system', label: 'سیستم', icon: ComputerDesktopIcon },
+    { mode: 'light', labelKey: 'common.light', icon: SunIcon },
+    { mode: 'dark', labelKey: 'common.dark', icon: MoonIcon },
+    { mode: 'system', labelKey: 'common.system', icon: ComputerDesktopIcon },
 ];
 const currentThemeOption = computed(() => themeOptions.find((option) => option.mode === theme.mode) || themeOptions[0]);
 
@@ -47,10 +48,6 @@ watchEffect(() => {
     }
 });
 
-function firstError(exception, fallback) {
-    return exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || fallback;
-}
-
 async function saveGeneral() {
     saving.value = true;
     message.value = '';
@@ -59,9 +56,9 @@ async function saveGeneral() {
     try {
         const { data } = await window.axios.put('/api/profile', generalForm);
         auth.user = data.user;
-        message.value = 'اطلاعات عمومی ذخیره شد.';
+        message.value = t('profile.saved');
     } catch (exception) {
-        error.value = firstError(exception, 'ذخیره اطلاعات انجام نشد.');
+        error.value = apiError(exception, 'profile.saveFailed');
     } finally {
         saving.value = false;
     }
@@ -77,9 +74,9 @@ async function savePassword() {
         passwordForm.current_password = '';
         passwordForm.password = '';
         passwordForm.password_confirmation = '';
-        message.value = 'رمز عبور تغییر کرد.';
+        message.value = t('profile.passwordChanged');
     } catch (exception) {
-        error.value = firstError(exception, 'تغییر رمز انجام نشد.');
+        error.value = apiError(exception, 'profile.passwordFailed');
     } finally {
         saving.value = false;
     }
@@ -92,15 +89,15 @@ async function savePassword() {
             <div class="flex min-w-0 items-center gap-4">
                 <img :src="auth.user?.avatar_url" alt="" class="h-16 w-16 rounded-full bg-neutral-200 ring-1 ring-slate-200 dark:ring-neutral-800">
                 <div class="min-w-0">
-                    <h1 class="text-2xl font-bold">پروفایل</h1>
+                    <h1 class="text-2xl font-bold">{{ t('profile.title') }}</h1>
                     <p class="mt-1 truncate text-sm text-slate-500 dark:text-neutral-400">{{ auth.user?.email }}</p>
                 </div>
             </div>
             <button
                 class="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
                 type="button"
-                :title="`تم: ${currentThemeOption.label}`"
-                :aria-label="`تم: ${currentThemeOption.label}`"
+                :title="t('common.theme', { theme: t(currentThemeOption.labelKey) })"
+                :aria-label="t('common.theme', { theme: t(currentThemeOption.labelKey) })"
                 @click="cycleTheme"
             >
                 <component :is="currentThemeOption.icon" class="h-5 w-5" />
@@ -115,7 +112,7 @@ async function savePassword() {
                 @click="activeTab = 'general'"
             >
                 <UserIcon class="h-5 w-5" />
-                عمومی
+                {{ t('profile.general') }}
             </button>
             <button
                 class="inline-flex h-11 items-center gap-2 border-b-2 px-3 text-sm font-bold"
@@ -124,7 +121,7 @@ async function savePassword() {
                 @click="activeTab = 'security'"
             >
                 <KeyIcon class="h-5 w-5" />
-                امنیت
+                {{ t('profile.security') }}
             </button>
         </div>
 
@@ -143,16 +140,16 @@ async function savePassword() {
         >
             <div class="grid gap-4 md:grid-cols-2">
                 <label class="block">
-                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">نام</span>
+                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('common.name') }}</span>
                     <input v-model="generalForm.name" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" required>
                 </label>
                 <label class="block">
-                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">ایمیل</span>
+                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('common.email') }}</span>
                     <input v-model="generalForm.email" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" type="email" required>
                 </label>
             </div>
             <button class="mt-5 h-11 rounded-md bg-primary-600 px-5 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50" type="submit" :disabled="saving">
-                ذخیره
+                {{ t('profile.save') }}
             </button>
         </form>
 
@@ -163,20 +160,20 @@ async function savePassword() {
         >
             <div class="grid gap-4">
                 <label class="block">
-                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">رمز فعلی</span>
+                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('profile.currentPassword') }}</span>
                     <input v-model="passwordForm.current_password" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" type="password" required>
                 </label>
                 <label class="block">
-                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">رمز جدید</span>
+                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('profile.newPassword') }}</span>
                     <input v-model="passwordForm.password" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" type="password" minlength="8" required>
                 </label>
                 <label class="block">
-                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">تکرار رمز جدید</span>
+                    <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('profile.confirmPassword') }}</span>
                     <input v-model="passwordForm.password_confirmation" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" type="password" minlength="8" required>
                 </label>
             </div>
             <button class="mt-5 h-11 rounded-md bg-primary-600 px-5 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50" type="submit" :disabled="saving">
-                تغییر رمز
+                {{ t('profile.changePassword') }}
             </button>
         </form>
     </section>

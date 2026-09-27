@@ -3,6 +3,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { TrashIcon } from '@heroicons/vue/24/outline';
 import CardManager from '../components/CardManager.vue';
+import { apiError, t } from '../i18n';
 
 const route = useRoute();
 const router = useRouter();
@@ -13,10 +14,6 @@ const page = reactive({
     category: null,
     access: null,
 });
-
-function firstError(exception, fallback) {
-    return exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || fallback;
-}
 
 async function fetchCategory() {
     loading.value = true;
@@ -31,14 +28,14 @@ async function fetchCategory() {
             router.replace({ name: 'category', params: { id: route.params.id } });
         }
     } catch (exception) {
-        error.value = firstError(exception, 'اطلاعات دسته دریافت نشد.');
+        error.value = apiError(exception, 'categories.fetchInfoFailed');
     } finally {
         loading.value = false;
     }
 }
 
 async function deleteCategory() {
-    if (!window.confirm('این دسته حذف شود؟')) {
+    if (!window.confirm(t('categories.deleteConfirm'))) {
         return;
     }
 
@@ -49,7 +46,7 @@ async function deleteCategory() {
         await window.axios.delete(`/api/categories/${route.params.id}`);
         router.replace({ name: 'categories' });
     } catch (exception) {
-        error.value = firstError(exception, 'حذف دسته انجام نشد.');
+        error.value = apiError(exception, 'categories.deleteFailed');
         await fetchCategory();
     } finally {
         deleting.value = false;
@@ -62,18 +59,18 @@ onMounted(fetchCategory);
 <template>
     <section class="mx-auto max-w-6xl px-4 py-8">
         <RouterLink :to="{ name: 'category', params: { id: route.params.id } }" class="mb-4 inline-flex text-sm font-semibold text-primary-700 hover:text-primary-800 dark:text-primary-300">
-            بازگشت به گام‌ها
+            {{ t('categories.backToSteps') }}
         </RouterLink>
 
         <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-neutral-800 dark:bg-neutral-950">
-            در حال دریافت اطلاعات...
+            {{ t('categories.loadingInfo') }}
         </div>
 
         <template v-else>
             <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <p v-if="page.category?.parent_name" class="mb-1 text-sm text-slate-500 dark:text-neutral-400">{{ page.category.parent_name }}</p>
-                    <h1 class="text-2xl font-bold">کارت‌های {{ page.category?.name }}</h1>
+                    <h1 class="text-2xl font-bold">{{ t('categories.cardsTitle', { name: page.category?.name }) }}</h1>
                 </div>
 
                 <button
@@ -84,7 +81,7 @@ onMounted(fetchCategory);
                     @click="deleteCategory"
                 >
                     <TrashIcon class="h-5 w-5" />
-                    حذف دسته
+                    {{ t('common.delete') }}
                 </button>
             </div>
 

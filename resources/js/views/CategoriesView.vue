@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ArrowPathIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import CategoryTreeNode from '../components/CategoryTreeNode.vue';
+import { apiError, locale, t } from '../i18n';
 
 const loading = ref(true);
 const saving = ref(false);
@@ -60,12 +61,8 @@ const parentOptions = computed(() => {
             id: category.id,
             path: pathFor(category),
         }))
-        .sort((a, b) => a.path.localeCompare(b.path, 'fa'));
+        .sort((a, b) => a.path.localeCompare(b.path, locale.value));
 });
-
-function firstError(exception, fallback) {
-    return exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || fallback;
-}
 
 function openCreateModal() {
     form.name = '';
@@ -88,8 +85,8 @@ async function fetchCategories() {
     try {
         const { data } = await window.axios.get('/api/categories');
         categories.value = data.categories;
-    } catch {
-        error.value = 'دسته‌ها دریافت نشدند.';
+    } catch (exception) {
+        error.value = apiError(exception, 'categories.fetchFailed');
     } finally {
         loading.value = false;
     }
@@ -105,11 +102,11 @@ async function saveCategory() {
             name: form.name,
             parent_id: form.parent_id || null,
         });
-        message.value = 'دسته اضافه شد.';
+        message.value = t('categories.saved');
         closeModal();
         await fetchCategories();
     } catch (exception) {
-        error.value = firstError(exception, 'ذخیره دسته انجام نشد.');
+        error.value = apiError(exception, 'categories.saveFailed');
     } finally {
         saving.value = false;
     }
@@ -122,14 +119,14 @@ onMounted(fetchCategories);
     <section class="mx-auto max-w-6xl px-4 py-8">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold">دسته‌ها</h1>
+                <h1 class="text-2xl font-bold">{{ t('categories.title') }}</h1>
             </div>
             <div class="flex items-center gap-2">
                 <button
                     class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 dark:border-neutral-700 dark:text-neutral-300"
                     type="button"
-                    title="افزودن دسته"
-                    aria-label="افزودن دسته"
+                    :title="t('categories.add')"
+                    :aria-label="t('categories.add')"
                     @click="openCreateModal"
                 >
                     <PlusIcon class="h-5 w-5" />
@@ -137,8 +134,8 @@ onMounted(fetchCategories);
                 <button
                     class="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600 hover:border-primary-400 hover:text-primary-700 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300"
                     type="button"
-                    title="تازه‌سازی"
-                    aria-label="تازه‌سازی"
+                    :title="t('common.refresh')"
+                    :aria-label="t('common.refresh')"
                     :disabled="loading"
                     @click="fetchCategories"
                 >
@@ -152,7 +149,7 @@ onMounted(fetchCategories);
         </p>
 
         <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-neutral-800 dark:bg-neutral-950">
-            در حال دریافت دسته‌ها...
+            {{ t('categories.loading') }}
         </div>
 
         <div v-else-if="error" class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
@@ -168,23 +165,23 @@ onMounted(fetchCategories);
                 <header class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-neutral-800">
                     <div class="flex items-center gap-2">
                         <PlusIcon class="h-5 w-5 text-primary-600" />
-                        <h2 class="text-lg font-bold">دسته جدید</h2>
+                        <h2 class="text-lg font-bold">{{ t('categories.new') }}</h2>
                     </div>
-                    <button class="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-neutral-900" type="button" aria-label="بستن" @click="closeModal">
+                    <button class="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-neutral-900" type="button" :aria-label="t('common.close')" @click="closeModal">
                         <XMarkIcon class="h-5 w-5" />
                     </button>
                 </header>
 
                 <div class="space-y-4 p-5">
                     <label class="block">
-                        <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">نام دسته</span>
+                        <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('categories.name') }}</span>
                         <input v-model="form.name" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" required>
                     </label>
 
                     <label class="block">
-                        <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">زیرمجموعه</span>
+                        <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('categories.parent') }}</span>
                         <select v-model="form.parent_id" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black">
-                            <option value="">بدون والد</option>
+                            <option value="">{{ t('categories.noParent') }}</option>
                             <option v-for="option in parentOptions" :key="option.id" :value="option.id">
                                 {{ option.path }}
                             </option>
@@ -194,10 +191,10 @@ onMounted(fetchCategories);
 
                 <footer class="flex justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-neutral-800">
                     <button class="h-10 rounded-md border border-slate-200 px-4 text-sm font-semibold dark:border-neutral-700" type="button" @click="closeModal">
-                        انصراف
+                        {{ t('common.cancel') }}
                     </button>
                     <button class="h-10 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50" type="submit" :disabled="saving">
-                        ذخیره
+                        {{ t('common.save') }}
                     </button>
                 </footer>
             </form>

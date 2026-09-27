@@ -70,7 +70,7 @@ class FlashcardController extends Controller
         $items = $this->lineList($data['items']);
 
         if ($items === []) {
-            throw ValidationException::withMessages(['items' => 'حداقل یک خط وارد کنید.']);
+            throw ValidationException::withMessages(['items' => 'Enter at least one line.']);
         }
 
         $flashcards = DB::transaction(function () use ($category, $data, $items) {
@@ -121,7 +121,7 @@ class FlashcardController extends Controller
 
         if ($cardCount < 1) {
             throw ValidationException::withMessages([
-                'sides' => 'حداقل یک خط برای ساخت کارت وارد کنید.',
+                'sides' => 'Enter at least one line to create cards.',
             ]);
         }
 
@@ -135,7 +135,7 @@ class FlashcardController extends Controller
 
         if ($cardIndexes->isEmpty()) {
             throw ValidationException::withMessages([
-                'sides' => 'حداقل یک کارت با متن وارد کنید.',
+                'sides' => 'Enter text for at least one card.',
             ]);
         }
 
@@ -212,7 +212,7 @@ class FlashcardController extends Controller
 
         if (! $flashcard->supportsAiProcessing()) {
             throw ValidationException::withMessages([
-                'type' => 'پردازش هوشمند فقط برای کارت‌های انگلیسی فعال و انگلیسی پسیو فعال است.',
+                'type' => 'Smart processing is only available for active and passive English cards.',
             ]);
         }
 

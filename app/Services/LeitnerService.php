@@ -27,7 +27,7 @@ class LeitnerService
 
         $items = [[
             'index' => null,
-            'label' => 'بدون گام',
+            'label' => 'No step',
             'delay_days' => null,
             'total_count' => $unintroduced,
             'due_count' => $unintroduced,
@@ -51,7 +51,7 @@ class LeitnerService
 
             $items[] = [
                 'index' => $index,
-                'label' => 'گام '.$index,
+                'label' => 'Step '.$index,
                 'delay_days' => $index === 0 ? 0 : $steps[$index - 1],
                 'total_count' => $total,
                 'due_count' => $due,
@@ -135,11 +135,11 @@ class LeitnerService
             'unknown' => 0,
             'mastered' => $lastStep,
             'custom' => $customStep,
-            default => throw ValidationException::withMessages(['action' => 'عملیات مطالعه نامعتبر است.']),
+            default => throw ValidationException::withMessages(['action' => 'The study action is invalid.']),
         };
 
         if ($targetStep === null || $targetStep < 0 || $targetStep > $lastStep) {
-            throw ValidationException::withMessages(['target_step' => 'گام انتخابی معتبر نیست.']);
+            throw ValidationException::withMessages(['target_step' => 'The selected step is invalid.']);
         }
 
         $now = now();
@@ -164,12 +164,12 @@ class LeitnerService
             ->all();
 
         if ($steps === []) {
-            throw ValidationException::withMessages(['steps' => 'حداقل یک گام زمان‌دار لازم است.']);
+            throw ValidationException::withMessages(['steps' => 'At least one timed step is required.']);
         }
 
         if (count($steps) < count($oldSteps) && array_slice($oldSteps, 0, count($steps)) !== $steps) {
             throw ValidationException::withMessages([
-                'steps' => 'برای جلوگیری از جابه‌جایی کارت‌ها، فقط گام‌های انتهایی قابل حذف هستند.',
+                'steps' => 'Only trailing steps may be removed to prevent cards from moving.',
             ]);
         }
 
@@ -179,7 +179,7 @@ class LeitnerService
 
         if ($highestOccupiedStep > count($steps)) {
             throw ValidationException::withMessages([
-                'steps' => 'نمی‌توانید گامی را حذف کنید که کارت داخل آن وجود دارد.',
+                'steps' => 'You cannot remove a step that contains cards.',
             ]);
         }
 
@@ -205,7 +205,7 @@ class LeitnerService
     private function guardStepExists(CategoryAccess $access, int $stepIndex): void
     {
         if ($stepIndex < 0 || $stepIndex > count($this->steps($access))) {
-            throw ValidationException::withMessages(['step' => 'گام انتخابی وجود ندارد.']);
+            throw ValidationException::withMessages(['step' => 'The selected step does not exist.']);
         }
     }
 }

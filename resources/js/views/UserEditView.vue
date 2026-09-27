@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ArrowRightIcon, CheckCircleIcon, KeyIcon, ShieldCheckIcon, UserIcon } from '@heroicons/vue/24/outline';
 import { auth } from '../stores/auth';
+import { apiError, roleLabel, t } from '../i18n';
 
 const route = useRoute();
 const router = useRouter();
@@ -50,10 +51,6 @@ const categoryRows = computed(() => {
     return rows;
 });
 
-function firstError(exception, fallback) {
-    return exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || fallback;
-}
-
 function categoryState(category) {
     return categories.value.find((item) => item.id === category.id) || category;
 }
@@ -77,7 +74,7 @@ async function fetchUser() {
         const { data } = await window.axios.get(`/api/users/${route.params.id}`);
         fillForm(data);
     } catch (exception) {
-        error.value = firstError(exception, 'دریافت اطلاعات کاربر انجام نشد.');
+        error.value = apiError(exception, 'users.fetchUserFailed');
     } finally {
         loading.value = false;
     }
@@ -106,9 +103,9 @@ async function saveUser() {
         }
         user.value = data.user;
         form.password = '';
-        message.value = 'اطلاعات کاربر ذخیره شد.';
+        message.value = t('users.userSaved');
     } catch (exception) {
-        error.value = firstError(exception, 'ذخیره کاربر انجام نشد.');
+        error.value = apiError(exception, 'users.saveFailed');
     } finally {
         savingUser.value = false;
     }
@@ -146,9 +143,9 @@ async function saveAccesses() {
             })),
         });
         categories.value = data.categories;
-        message.value = 'دسترسی دسته‌ها ذخیره شد.';
+        message.value = t('users.accessSaved');
     } catch (exception) {
-        error.value = firstError(exception, 'ذخیره دسترسی دسته‌ها انجام نشد.');
+        error.value = apiError(exception, 'users.accessSaveFailed');
     } finally {
         savingAccesses.value = false;
     }
@@ -165,11 +162,11 @@ onMounted(fetchUser);
             @click="router.push({ name: 'users' })"
         >
             <ArrowRightIcon class="h-4 w-4" />
-            بازگشت به کاربران
+            {{ t('users.back') }}
         </button>
 
         <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-neutral-800 dark:bg-neutral-950">
-            در حال دریافت اطلاعات کاربر...
+            {{ t('users.loadingUser') }}
         </div>
 
         <template v-else>
@@ -177,7 +174,7 @@ onMounted(fetchUser);
                 <div class="flex min-w-0 items-center gap-3">
                     <img :src="user?.avatar_url" alt="" class="h-14 w-14 rounded-full bg-neutral-200">
                     <div class="min-w-0">
-                        <h1 class="truncate text-2xl font-bold">ویرایش کاربر</h1>
+                        <h1 class="truncate text-2xl font-bold">{{ t('users.edit') }}</h1>
                         <p class="mt-1 truncate text-sm text-slate-500 dark:text-neutral-400">{{ user?.email }}</p>
                     </div>
                 </div>
@@ -195,45 +192,45 @@ onMounted(fetchUser);
                 <form class="rounded-lg border border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-950" @submit.prevent="saveUser">
                     <header class="flex items-center gap-2 border-b border-slate-200 px-5 py-4 dark:border-neutral-800">
                         <UserIcon class="h-5 w-5 text-primary-600" />
-                        <h2 class="font-bold">اطلاعات کاربر</h2>
+                        <h2 class="font-bold">{{ t('users.info') }}</h2>
                     </header>
 
                     <div class="space-y-4 p-5">
                         <label class="block">
-                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">نام</span>
+                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('common.name') }}</span>
                             <input v-model="form.name" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" required>
                         </label>
 
                         <label class="block">
-                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">ایمیل</span>
+                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('common.email') }}</span>
                             <input v-model="form.email" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" type="email" required>
                         </label>
 
                         <label class="block">
-                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">رمز جدید</span>
+                            <span class="mb-1 block text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t('users.newPassword') }}</span>
                             <input v-model="form.password" class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-left outline-none focus:border-primary-500 dark:border-neutral-700 dark:bg-black" dir="ltr" type="password" minlength="8">
                         </label>
 
                         <label class="flex items-center gap-2 text-sm font-semibold">
                             <input v-model="form.is_active" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-primary-600">
-                            فعال باشد
+                            {{ t('users.activeLabel') }}
                         </label>
 
                         <div>
                             <p class="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-neutral-200">
                                 <KeyIcon class="h-4 w-4" />
-                                نقش‌ها
+                                {{ t('common.roles') }}
                             </p>
                             <label v-for="role in roles" :key="role" class="mb-2 flex items-center gap-2 text-sm">
                                 <input v-model="form.roles" :value="role" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-primary-600">
-                                {{ role }}
+                                {{ roleLabel(role) }}
                             </label>
                         </div>
                     </div>
 
                     <footer class="flex justify-end border-t border-slate-200 px-5 py-4 dark:border-neutral-800">
                         <button class="h-10 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50" type="submit" :disabled="savingUser">
-                            ذخیره کاربر
+                            {{ t('users.saveUser') }}
                         </button>
                     </footer>
                 </form>
@@ -242,35 +239,35 @@ onMounted(fetchUser);
                     <header class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-neutral-800">
                         <div class="flex items-center gap-2">
                             <ShieldCheckIcon class="h-5 w-5 text-primary-600" />
-                            <h2 class="font-bold">دسترسی دسته‌ها</h2>
+                            <h2 class="font-bold">{{ t('users.accesses') }}</h2>
                         </div>
                         <button class="h-10 rounded-md bg-primary-600 px-4 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50" type="button" :disabled="savingAccesses" @click="saveAccesses">
-                            ذخیره دسترسی
+                            {{ t('users.saveAccess') }}
                         </button>
                     </header>
 
                     <div v-if="hasGlobalCategoryAccess" class="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                        این کاربر نقش accessAllCategories دارد؛ برای گرفتن دسترسی کامل به دسته‌ها، این نقش را از بخش نقش‌ها بردارید.
+                        {{ t('users.globalAccessHint') }}
                     </div>
 
                     <div class="divide-y divide-slate-100 dark:divide-neutral-800">
                         <article v-for="category in categoryRows" :key="category.id" class="grid min-h-14 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-3">
-                            <div class="min-w-0" :style="{ paddingRight: `${category.depth * 20}px` }">
+                            <div class="min-w-0" :style="{ paddingInlineStart: `${category.depth * 20}px` }">
                                 <p class="truncate text-sm font-bold text-slate-800 dark:text-neutral-100">{{ category.name }}</p>
-                                <p class="mt-0.5 text-xs text-slate-500 dark:text-neutral-400">{{ category.flashcards_count }} کارت</p>
+                                <p class="mt-0.5 text-xs text-slate-500 dark:text-neutral-400">{{ t('common.cards', { count: category.flashcards_count }) }}</p>
                             </div>
                             <label class="flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-600 dark:text-neutral-300">
                                 <input :checked="category.has_access" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-primary-600" @change="setHasAccess(category, $event.target.checked)">
-                                دسترسی
+                                {{ t('users.access') }}
                             </label>
                             <label class="flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-600 dark:text-neutral-300">
                                 <input :checked="category.can_edit" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-primary-600" @change="setCanEdit(category, $event.target.checked)">
-                                ویرایش
+                                {{ t('users.editAccess') }}
                             </label>
                         </article>
 
                         <div v-if="!categoryRows.length" class="p-5 text-center text-sm text-slate-500 dark:text-neutral-400">
-                            دسته‌ای وجود ندارد.
+                            {{ t('users.noCategories') }}
                         </div>
                     </div>
                 </section>

@@ -11,6 +11,7 @@ import {
     RectangleStackIcon,
 } from '@heroicons/vue/24/outline';
 import StepEditorModal from '../components/StepEditorModal.vue';
+import { apiError, t } from '../i18n';
 
 const route = useRoute();
 const loading = ref(true);
@@ -37,7 +38,7 @@ async function fetchCategory() {
         page.access = data.access;
         page.summaries = data.summaries;
     } catch (exception) {
-        error.value = exception.response?.data?.message || 'اطلاعات دسته دریافت نشد.';
+        error.value = apiError(exception, 'categories.fetchInfoFailed');
     } finally {
         loading.value = false;
     }
@@ -51,7 +52,7 @@ async function introduce() {
         const { data } = await window.axios.post(`/api/categories/${route.params.id}/introduce`, { count: introduceCount.value });
         page.summaries = data.summaries;
     } catch (exception) {
-        error.value = exception.response?.data?.message || 'کارت‌ها وارد گام صفر نشدند.';
+        error.value = apiError(exception, 'categories.introduceFailed');
     } finally {
         saving.value = false;
     }
@@ -67,14 +68,14 @@ async function saveSteps(steps) {
         page.summaries = data.summaries;
         modalOpen.value = false;
     } catch (exception) {
-        error.value = exception.response?.data?.message || Object.values(exception.response?.data?.errors || {})?.flat()?.[0] || 'گام‌ها ذخیره نشدند.';
+        error.value = apiError(exception, 'steps.saveFailed');
     } finally {
         saving.value = false;
     }
 }
 
 function delayLabel(summary) {
-    return summary.delay_days === 0 ? 'بدون محدودیت روز' : `${summary.delay_days} روز فاصله`;
+    return summary.delay_days === 0 ? t('steps.unlimited') : t('steps.delayDays', { count: summary.delay_days });
 }
 
 onMounted(fetchCategory);
@@ -83,11 +84,11 @@ onMounted(fetchCategory);
 <template>
     <section class="mx-auto max-w-6xl px-4 py-8">
         <RouterLink :to="{ name: 'categories' }" class="mb-4 inline-flex text-sm font-semibold text-primary-700 hover:text-primary-800 dark:text-primary-300">
-            بازگشت به دسته‌ها
+            {{ t('categories.back') }}
         </RouterLink>
 
         <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-neutral-800 dark:bg-neutral-950">
-            در حال دریافت اطلاعات...
+            {{ t('categories.loadingInfo') }}
         </div>
 
         <template v-else>
@@ -100,7 +101,7 @@ onMounted(fetchCategory);
                             v-if="page.access.can_edit"
                             :to="{ name: 'category-cards', params: { id: page.category.id } }"
                             class="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-primary-700 dark:text-neutral-400 dark:hover:bg-neutral-900 dark:hover:text-primary-300"
-                            title="ویرایش کارت‌ها"
+                            :title="t('categories.editCards')"
                         >
                             <PencilSquareIcon class="h-5 w-5" />
                         </RouterLink>
@@ -113,7 +114,7 @@ onMounted(fetchCategory);
                     @click="modalOpen = true"
                 >
                     <PencilSquareIcon class="h-5 w-5" />
-                    ویرایش گام‌ها
+                    {{ t('categories.editSteps') }}
                 </button>
             </div>
 
@@ -124,9 +125,9 @@ onMounted(fetchCategory);
             <section v-if="unintroduced?.total_count > 0" class="mb-6 rounded-lg border border-primary-200 bg-primary-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
                 <div class="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
                     <div>
-                        <h2 class="text-base font-bold text-primary-900 dark:text-neutral-100">کارت‌های بدون گام</h2>
+                        <h2 class="text-base font-bold text-primary-900 dark:text-neutral-100">{{ t('categories.noStepCards') }}</h2>
                         <p class="mt-1 text-sm text-primary-800/80 dark:text-neutral-400">
-                            {{ unintroduced?.total_count || 0 }} کارت هنوز وارد برنامه مطالعه نشده است.
+                            {{ t('categories.unintroducedCount', { count: unintroduced?.total_count || 0 }) }}
                         </p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
@@ -145,7 +146,7 @@ onMounted(fetchCategory);
                             @click="introduce"
                         >
                             <PlusIcon class="h-5 w-5" />
-                            انتقال به گام ۰
+                            {{ t('categories.introduce') }}
                         </button>
                     </div>
                 </div>
@@ -163,7 +164,7 @@ onMounted(fetchCategory);
                             v-if="summary.due_count > 0"
                             :to="{ name: 'study', params: { id: page.category.id, step: summary.index } }"
                             class="absolute left-0 top-2 grid h-11 w-11 place-items-center rounded-md bg-primary-600 text-white shadow-sm shadow-primary-600/20 hover:bg-primary-700 max-md:top-0 max-md:h-10 max-md:w-10"
-                            title="شروع مطالعه"
+                            :title="t('categories.startStudy')"
                         >
                             <PlayIcon class="h-5 w-5" />
                         </RouterLink>
@@ -172,7 +173,7 @@ onMounted(fetchCategory);
                             class="absolute left-0 top-2 grid h-11 w-11 place-items-center rounded-md border border-slate-200 text-slate-300 dark:border-neutral-800 dark:text-neutral-600 max-md:top-0 max-md:h-10 max-md:w-10"
                             type="button"
                             disabled
-                            title="کارتی برای امروز نیست"
+                            :title="t('categories.noCardsToday')"
                         >
                             <PlayIcon class="h-5 w-5" />
                         </button>
@@ -180,7 +181,7 @@ onMounted(fetchCategory);
                             v-if="summary.total_count > 0"
                             :to="{ name: 'step-cards', params: { id: page.category.id, step: summary.index } }"
                             class="absolute left-[3.25rem] top-2 grid h-11 w-11 place-items-center rounded-md border border-primary-200 bg-white text-primary-700 shadow-sm hover:border-primary-400 hover:bg-primary-50 dark:border-neutral-700 dark:bg-neutral-950 dark:text-primary-300 dark:hover:border-primary-600 max-md:left-12 max-md:top-0 max-md:h-10 max-md:w-10"
-                            title="مشاهده کارت‌های گام"
+                            :title="t('categories.viewStepCards')"
                         >
                             <EyeIcon class="h-5 w-5" />
                         </RouterLink>
@@ -189,7 +190,7 @@ onMounted(fetchCategory);
                             class="absolute left-[3.25rem] top-2 grid h-11 w-11 place-items-center rounded-md border border-slate-200 text-slate-300 dark:border-neutral-800 dark:text-neutral-600 max-md:left-12 max-md:top-0 max-md:h-10 max-md:w-10"
                             type="button"
                             disabled
-                            title="کارتی در این گام نیست"
+                            :title="t('categories.noCardsInStep')"
                         >
                             <EyeIcon class="h-5 w-5" />
                         </button>
@@ -201,15 +202,15 @@ onMounted(fetchCategory);
                         </div>
                         <div class="absolute -left-24 right-0 top-16 h-1 -translate-y-1/2 rounded-full bg-slate-500 dark:bg-neutral-700 max-md:-left-20 max-md:top-12 max-md:h-px" />
                         <div class="absolute inset-x-0 top-20 flex justify-center gap-12 max-md:top-[3.75rem] max-md:gap-5" dir="rtl">
-                            <div class="flex items-center gap-2 whitespace-nowrap text-sm font-black text-amber-700 dark:text-amber-300 max-md:gap-1 max-md:text-xs" title="در انتظار موعد">
+                            <div class="flex items-center gap-2 whitespace-nowrap text-sm font-black text-amber-700 dark:text-amber-300 max-md:gap-1 max-md:text-xs" :title="t('categories.waiting')">
                                 <ClockIcon class="h-5 w-5" />
                                 <span>{{ summary.locked_count }}</span>
                             </div>
-                            <div class="flex items-center gap-2 whitespace-nowrap text-sm font-black text-emerald-700 dark:text-emerald-300 max-md:gap-1 max-md:text-xs" title="آماده مطالعه">
+                            <div class="flex items-center gap-2 whitespace-nowrap text-sm font-black text-emerald-700 dark:text-emerald-300 max-md:gap-1 max-md:text-xs" :title="t('categories.ready')">
                                 <CheckCircleIcon class="h-5 w-5" />
                                 <span>{{ summary.due_count }}</span>
                             </div>
-                            <div class="flex items-center gap-2 whitespace-nowrap text-sm font-black text-slate-700 dark:text-neutral-200 max-md:gap-1 max-md:text-xs" title="کل کارت‌ها">
+                            <div class="flex items-center gap-2 whitespace-nowrap text-sm font-black text-slate-700 dark:text-neutral-200 max-md:gap-1 max-md:text-xs" :title="t('categories.totalCards')">
                                 <RectangleStackIcon class="h-5 w-5 text-slate-500" />
                                 <span>{{ summary.total_count }}</span>
                             </div>

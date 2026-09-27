@@ -18,7 +18,7 @@ class AuthController extends Controller
 
         if (! Auth::attempt($credentials, true)) {
             throw ValidationException::withMessages([
-                'email' => 'ایمیل یا رمز عبور درست نیست.',
+                'email' => 'Invalid credentials.',
             ]);
         }
 
@@ -26,7 +26,7 @@ class AuthController extends Controller
             Auth::guard('web')->logout();
 
             throw ValidationException::withMessages([
-                'email' => 'حساب کاربری شما غیرفعال است.',
+                'email' => 'This account is inactive.',
             ]);
         }
 
