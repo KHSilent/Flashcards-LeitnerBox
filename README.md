@@ -170,8 +170,6 @@ pnpm run build
 pnpm audit --prod
 ```
 
-The repository also includes a GitHub Actions workflow that runs formatting checks, backend tests, and the frontend production build.
-
 ## Production checklist
 
 1. Point the web server document root to the `public` directory.
