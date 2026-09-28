@@ -85,7 +85,7 @@ A bilingual Persian/English Leitner flashcard application built with Laravel 12,
 ## Local setup
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/KHSilent/Flashcards-LeitnerBox.git
 cd FlashCard
 composer install
 pnpm install --frozen-lockfile
