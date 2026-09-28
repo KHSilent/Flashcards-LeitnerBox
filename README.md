@@ -14,6 +14,65 @@ A bilingual Persian/English Leitner flashcard application built with Laravel 12,
 - User, role, profile, and category-access management
 - Installable PWA manifest and service worker
 
+## Screenshots
+
+### Desktop — Persian / Dark
+
+<table>
+  <tr>
+    <td align="center"><strong>ورود</strong></td>
+    <td align="center"><strong>دسته‌ها</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/desktop-fa-dark-login.png" alt="Persian dark desktop login" width="680"></td>
+    <td><img src="docs/screenshots/desktop-fa-dark-dashboard.png" alt="Persian dark desktop categories" width="680"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>گام‌های لایتنر</strong></td>
+    <td align="center"><strong>جلسه مطالعه</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/desktop-fa-dark-category.png" alt="Persian dark desktop Leitner steps" width="680"></td>
+    <td><img src="docs/screenshots/desktop-fa-dark-study.png" alt="Persian dark desktop study session" width="680"></td>
+  </tr>
+</table>
+
+### Desktop — English / Light
+
+<table>
+  <tr>
+    <td align="center"><strong>Login</strong></td>
+    <td align="center"><strong>Category overview</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/desktop-en-light-login.png" alt="English light desktop login" width="680"></td>
+    <td><img src="docs/screenshots/desktop-en-light-dashboard.png" alt="English light desktop categories" width="680"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><strong>Study session</strong></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/screenshots/desktop-en-light-study.png" alt="English light desktop study session" width="900"></td>
+  </tr>
+</table>
+
+### Mobile — Persian / Dark
+
+<table>
+  <tr>
+    <td align="center"><strong>ورود</strong></td>
+    <td align="center"><strong>دسته‌ها</strong></td>
+    <td align="center"><strong>گام‌ها</strong></td>
+    <td align="center"><strong>مطالعه</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/login.png" alt="Persian dark mobile login" width="260"></td>
+    <td><img src="docs/screenshots/dashboard.png" alt="Persian dark mobile categories" width="260"></td>
+    <td><img src="docs/screenshots/category.png" alt="Persian dark mobile Leitner steps" width="260"></td>
+    <td><img src="docs/screenshots/study.png" alt="Persian dark mobile study session" width="260"></td>
+  </tr>
+</table>
+
 ## Requirements
 
 - PHP 8.2 or newer

@@ -11,7 +11,7 @@ import {
     RectangleStackIcon,
 } from '@heroicons/vue/24/outline';
 import StepEditorModal from '../components/StepEditorModal.vue';
-import { apiError, t } from '../i18n';
+import { apiError, isRtl, t } from '../i18n';
 
 const route = useRoute();
 const loading = ref(true);
@@ -197,7 +197,10 @@ onMounted(fetchCategory);
                     </div>
 
                     <div class="relative h-32 min-w-0 max-md:h-24">
-                        <div class="absolute right-2 top-3 max-w-64 truncate text-right text-sm font-extrabold text-slate-900 dark:text-neutral-100 max-md:top-1 max-md:max-w-36 max-md:text-xs" dir="rtl">
+                        <div
+                            class="absolute right-2 top-3 max-w-64 truncate text-right text-sm font-extrabold text-slate-900 dark:text-neutral-100 max-md:top-1 max-md:max-w-36 max-md:text-xs"
+                            :dir="isRtl ? 'rtl' : 'ltr'"
+                        >
                             {{ delayLabel(summary) }}
                         </div>
                         <div class="absolute -left-24 right-0 top-16 h-1 -translate-y-1/2 rounded-full bg-slate-500 dark:bg-neutral-700 max-md:-left-20 max-md:top-12 max-md:h-px" />
